@@ -5,16 +5,15 @@ pygame.init()
 
 import datetime
 
-# Початковий ігровий час
 game_time = datetime.datetime(2007, 3, 24, 0, 0)
 time_speed = 1.0  # 1x
 paused = False
-hour_interval = 5_000  # 5 секунд (в мілісекундах)
+hour_interval = 1_250  # 5 секунд (в мілісекундах)
 last_update = pygame.time.get_ticks()
 
 WIDTH, HEIGHT = 1400, 800
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Екрани у Pygame")
+pygame.display.set_caption("Regional Power")
 
 WHITE = (255, 255, 255)
 BLUE = (100, 100, 255)
@@ -51,6 +50,27 @@ buttons = [
     {"label": "Розвідка", "rect": pygame.Rect(440, 450, 140, 40)},
 ]
 
+events = [
+    {"date": datetime.datetime(2007, 3, 25, 14), "title": "Зустріч з інвестором", "desc": "Обговорення майбутнього фінансування."},
+    {"date": datetime.datetime(2007, 3, 26, 10), "title": "Виступ у парламенті", "desc": "Запропонована нова економічна реформа."},
+    {"date": datetime.datetime(2007, 3, 28, 9),  "title": "Рада безпеки", "desc": "Термінове обговорення ситуації в регіоні."},
+]
+
+active_event = None  # Поточна активна подія
+
+if not active_event:
+    active_event = {
+        "type": "choice",  # або "info"
+        "title": "Політична пропозиція",
+        "text": "Вас запрошують приєднатися до партії Солідарності...",
+        "options": ["Приєднатися", "Обдумати", "Відмовитися"],
+        "on_choice": {
+            "Приєднатися": print("Event_1_exit_1"),
+            "Обдумати": print("Event_1_exit_2"),
+            "Відмовитися":print("Event_1_exit_3")
+        }
+    }
+
 current_screen = "main"
 clicked = False
 money = 0
@@ -58,21 +78,13 @@ power = 1
 
 assets_rect = pygame.Rect(290, 180, 380, 130)
 
-def draw_main_screen():
-    screen.fill(LIGHT_GRAY)
+main_screen_data = {}
 
-    blocks = {
-        "map": pygame.Rect(20, 20, 250, 300),
-        "graph": pygame.Rect(290, 20, 250, 150),
-        "news": pygame.Rect(290, 320, 380, 140),
-        "assets": assets_rect,  # глобальна змінна
-        "event_calendar": pygame.Rect(680, 180, 250, 280),
-        "profile": pygame.Rect(950, 20, 180, 250),
-        "partners": pygame.Rect(950, 300, 420, 280),
-        "log": pygame.Rect(680, 480, 690, 100),
-        "ukraine_map": pygame.Rect(20, 340, 250, 240)
-    }
+main_surface = pygame.Surface((WIDTH, HEIGHT))
+main_needs_redraw = True
 
+
+def generate_main_screen_data():
     import random
     sample_news = [
         "Уряд змінив курс валюти",
@@ -94,9 +106,9 @@ def draw_main_screen():
         "Дохід/міс: 120 000 ₴"
     ]
 
-    placeholder_data = {
+    main_screen_data.update({
         "map": ["Карта світу", "Локація: Київ"],
-        "graph": [],  # Малюємо окремо вручну
+        "graph": [],
         "news": ["Останні новини:", random.choice(sample_news)],
         "assets": ["Стан активів:", random.choice(sample_assets)],
         "event_calendar": ["Найближча подія:", random.choice(sample_events)],
@@ -105,29 +117,42 @@ def draw_main_screen():
         "partners": ["Партнери: 6", "— Красницький, Ігоренко"],
         "log": ["Останні дії:", "— 23.03: Зустріч"],
         "ukraine_map": ["Мапа України", "Область: Херсон"]
+    })
+
+generate_main_screen_data()
+
+
+def draw_main_screen():
+    main_surface.fill(LIGHT_GRAY)
+
+    blocks = {
+        "map": pygame.Rect(20, 20, 250, 300),
+        "graph": pygame.Rect(290, 20, 250, 150),
+        "news": pygame.Rect(290, 320, 380, 140),
+        "assets": assets_rect,
+        "event_calendar": pygame.Rect(680, 180, 250, 280),
+        "profile": pygame.Rect(950, 20, 180, 250),
+        "partners": pygame.Rect(950, 300, 420, 280),
+        "log": pygame.Rect(680, 480, 690, 100),
+        "ukraine_map": pygame.Rect(20, 340, 250, 240)
     }
 
     for name, rect in blocks.items():
-        pygame.draw.rect(screen, WHITE, rect)
-        pygame.draw.rect(screen, GRAY, rect, 2)
+        pygame.draw.rect(main_surface, WHITE, rect)
+        pygame.draw.rect(main_surface, GRAY, rect, 2)
 
-        # Назва
         label = small_plus_font.render(name.replace("_", " ").title(), True, BLACK)
-        screen.blit(label, (rect.x + 10, rect.y + 10))
+        main_surface.blit(label, (rect.x + 10, rect.y + 10))
 
-        # Спеціальна обробка графіка
         if name == "graph":
-            draw_dummy_graph(rect)
+            draw_dummy_graph(rect, surface=main_surface)
             continue
 
-        # Текст-заглушка
-        if name in placeholder_data:
-            for i, line in enumerate(placeholder_data[name]):
+        if name in main_screen_data:
+            for i, line in enumerate(main_screen_data[name]):
                 text = small_font.render(line, True, DARK_GRAY)
-                screen.blit(text, (rect.x + 10, rect.y + 40 + i * 20))
-        draw_game_clock()
+                main_surface.blit(text, (rect.x + 10, rect.y + 40 + i * 20))
 
-    pygame.display.flip()
 
 def update_game_time():
     global game_time, last_update
@@ -138,8 +163,12 @@ def update_game_time():
 
 
 def draw_game_clock(x_offset=470, y_offset = 40):
-    # Центрована дата і час
-    time_str = game_time.strftime("Час: %H:%M   |   %d %B %Y")
+    ukr_months = [
+        "січня", "лютого", "березня", "квітня", "травня", "червня",
+        "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"
+    ]
+    month_name = ukr_months[game_time.month - 1]
+    time_str = f"Час: {game_time.strftime('%H:%M')}   |   {game_time.day} {month_name} {game_time.year}"
     label = small_plus_font.render(time_str, True, BLACK)
     screen.blit(label, (x_offset+100, 10))
 
@@ -155,23 +184,46 @@ def draw_game_clock(x_offset=470, y_offset = 40):
         screen.blit(paused_label, (x_offset + 100 + len(available_speeds) * 50 + 20, y_offset))
 
 
-def draw_dummy_graph(rect):
-    # Намалювати сітку
+def draw_event_calendar_screen():
+    screen.fill(LIGHT_GRAY)
+
+    title = font.render("Календар подій", True, BLACK)
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 20))
+
+    sorted_events = sorted(events, key=lambda e: e["date"])
+
+    y = 80
+    for ev in sorted_events:
+        time_str = ev["date"].strftime("%d.%m.%Y %H:%M")
+        pygame.draw.rect(screen, WHITE, (100, y, 1200, 60))
+        pygame.draw.rect(screen, GRAY, (100, y, 1200, 60), 1)
+
+        screen.blit(small_plus_font.render(time_str, True, BLACK), (110, y + 5))
+        screen.blit(small_plus_font.render(ev["title"], True, BLACK), (300, y + 5))
+        screen.blit(small_font.render(ev["desc"], True, DARK_GRAY), (300, y + 30))
+        y += 70
+
+    back_btn = pygame.Rect(50, HEIGHT - 60, 120, 40)
+    pygame.draw.rect(screen, WHITE, back_btn)
+    pygame.draw.rect(screen, BLACK, back_btn, 1)
+    screen.blit(small_plus_font.render("← Назад", True, BLACK), (60, HEIGHT - 50))
+
+
+def draw_dummy_graph(rect, surface=screen):
     for i in range(6):
         y = rect.y + 20 + i * 20
-        pygame.draw.line(screen, GRAY, (rect.x + 5, y), (rect.x + rect.width - 5, y), 1)
+        pygame.draw.line(surface, GRAY, (rect.x + 5, y), (rect.x + rect.width - 5, y), 1)
 
-    # Фіктивні дані
     points = [100, 80, 90, 110, 130, 120, 140]
     for i in range(len(points) - 1):
         x1 = rect.x + 20 + i * 30
         y1 = rect.y + rect.height - points[i] * 0.4
         x2 = rect.x + 20 + (i + 1) * 30
         y2 = rect.y + rect.height - points[i + 1] * 0.4
-        pygame.draw.line(screen, BLUE, (x1, y1), (x2, y2), 3)
+        pygame.draw.line(surface, BLUE, (x1, y1), (x2, y2), 3)
 
-    # Підпис
-    screen.blit(small_font.render("Графік популярності", True, DARK_GRAY), (rect.x + 10, rect.y + rect.height - 20))
+    surface.blit(small_font.render("Графік популярності", True, DARK_GRAY), (rect.x + 10, rect.y + rect.height - 20))
+
 
 
 def draw_assets_screen():
@@ -223,6 +275,39 @@ def draw_assets_screen():
     draw_game_clock(50,40)
     screen.blit(total, (offset_x + 270, 620))
 
+def draw_event_popup(event):
+    popup_rect = pygame.Rect(200, 150, 1000, 500)
+    pygame.draw.rect(screen, WHITE, popup_rect)
+    pygame.draw.rect(screen, BLACK, popup_rect, 3)
+
+    # Заголовок
+    title = medium_plus_font.render(event["title"], True, BLACK)
+    screen.blit(title, (popup_rect.x + 20, popup_rect.y + 20))
+
+    # Текст
+    lines = event["text"].split("\n")
+    for i, line in enumerate(lines):
+        txt = small_plus_font.render(line, True, BLACK)
+        screen.blit(txt, (popup_rect.x + 20, popup_rect.y + 70 + i * 30))
+
+    # Кнопки
+    event["buttons"] = []
+    if event["type"] == "info":
+        btn_rect = pygame.Rect(popup_rect.x + 400, popup_rect.y + 400, 200, 40)
+        pygame.draw.rect(screen, GRAY, btn_rect)
+        pygame.draw.rect(screen, BLACK, btn_rect, 2)
+        label = small_plus_font.render("Закрити", True, BLACK)
+        screen.blit(label, (btn_rect.x + 60, btn_rect.y + 10))
+        event["buttons"].append(("Закрити", btn_rect))
+
+    elif event["type"] == "choice":
+        for i, option in enumerate(event["options"]):
+            btn_rect = pygame.Rect(popup_rect.x + 50 + i * 300, popup_rect.y + 400, 250, 40)
+            pygame.draw.rect(screen, GRAY, btn_rect)
+            pygame.draw.rect(screen, BLACK, btn_rect, 2)
+            label = small_plus_font.render(option, True, BLACK)
+            screen.blit(label, (btn_rect.x + 20, btn_rect.y + 10))
+            event["buttons"].append((option, btn_rect))
 
 
 def draw_profile_screen():
@@ -319,10 +404,24 @@ while True:
             sys.exit()
 
 
+
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            if active_event:
+                for label, rect in active_event["buttons"]:
+                    if rect.collidepoint(event.pos):
+                        active_event = None  # Закриваємо івент
+                        break
+                continue
             if current_screen == "main":
                 if assets_rect.collidepoint(event.pos):
                     current_screen = "assets_w"
+                elif "event_calendar" in main_screen_data:
+                    rect = pygame.Rect(680, 180, 250, 280)  # координати блока event_calendar
+                    if rect.collidepoint(event.pos):
+                        current_screen = "event_calendar"
+
+
+
 
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_SPACE:
@@ -333,6 +432,8 @@ while True:
                 elif current_screen == "partner":
                     current_screen = "assets_w"
                 elif current_screen == "assets_w":
+                    current_screen = "event_calendar"
+                elif current_screen == "event_calendar":
                     current_screen = "main"
 
             elif event.type == pygame.KEYDOWN:
@@ -348,14 +449,23 @@ while True:
                         time_speed = available_speeds[idx - 1]
 
     if current_screen == "main":
-        draw_main_screen()
+        if main_needs_redraw:
+            draw_main_screen()
+            main_needs_redraw = False
+
+        screen.blit(main_surface, (0, 0))
+        draw_game_clock()
+
     elif current_screen == "profile":
         draw_profile_screen()
     elif current_screen == "partner":
         draw_partner_screen()
     elif current_screen == "assets_w":
         draw_assets_screen()
+    elif current_screen == "event_calendar":
+        draw_event_calendar_screen()
 
-
+    if active_event:
+        draw_event_popup(active_event)
 
     pygame.display.flip()
