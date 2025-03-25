@@ -275,6 +275,49 @@ def draw_assets_screen():
     draw_game_clock(50,40)
     screen.blit(total, (offset_x + 270, 620))
 
+def draw_company_market_screen():
+    screen.fill(LIGHT_GRAY)
+
+    draw_game_clock(300)  # Годинник у верхній частині
+
+    # Зсув вниз, щоб не перекривало годинник
+    y_offset = 150
+
+    # Ліва панель: компанії
+    pygame.draw.rect(screen, WHITE, (50, y_offset, 1000, 520))  # Висота зменшена (620 → 520)
+    pygame.draw.rect(screen, BLACK, (50, y_offset, 1000, 520), 3)
+
+    title = medium_plus_font.render("Створити або купити компанію", True, BLACK)
+    screen.blit(title, (70, y_offset + 20))  # Відступ у середині панелі
+
+    companies = [
+        {"name": "ТОВ 'ХерсонБуд'", "sector": "Будівництво", "cost": "800 000 ₴", "income": "50 000 ₴/міс"},
+        {"name": "ТОВ 'АгроХолдинг'", "sector": "Сільське господарство", "cost": "650 000 ₴", "income": "42 000 ₴/міс"},
+        {"name": "ТОВ 'Digital Media'", "sector": "Медіа", "cost": "950 000 ₴", "income": "60 000 ₴/міс"},
+    ]
+
+    for i, item in enumerate(companies):
+        y = y_offset + 70 + i * 120  # Зсув по Y
+        pygame.draw.rect(screen, WHITE, (70, y, 960, 100))
+        pygame.draw.rect(screen, GRAY, (70, y, 960, 100), 1)
+
+        screen.blit(small_plus_font.render(item["name"], True, BLACK), (90, y + 10))
+        screen.blit(small_font.render(f"Сектор: {item['sector']}", True, DARK_GRAY), (90, y + 40))
+        screen.blit(small_font.render(f"Вартість: {item['cost']}", True, DARK_GRAY), (90, y + 65))
+        screen.blit(small_font.render(f"Дохід: {item['income']}", True, DARK_GRAY), (300, y + 65))
+
+        buy_button = pygame.Rect(850, y + 30, 150, 35)
+        pygame.draw.rect(screen, GREEN, buy_button)
+        pygame.draw.rect(screen, BLACK, buy_button, 2)
+        screen.blit(small_plus_font.render("Купити", True, WHITE), (buy_button.x + 35, buy_button.y + 5))
+
+    # Права панель (залишаємо)
+    pygame.draw.rect(screen, LIGHT_GRAY, (1100, 50, 250, 620))
+    pygame.draw.rect(screen, GRAY, (1100, 50, 250, 620), 1)
+
+
+
+
 def draw_event_popup(event):
     popup_rect = pygame.Rect(200, 150, 1000, 500)
     pygame.draw.rect(screen, WHITE, popup_rect)
@@ -424,7 +467,7 @@ while True:
 
 
         elif event.type == pygame.KEYDOWN:
-            if event.key == pygame.K_SPACE:
+            if event.key == pygame.K_TAB:
                 if current_screen == "main":
                     current_screen = "profile"
                 elif current_screen == "profile":
@@ -434,10 +477,12 @@ while True:
                 elif current_screen == "assets_w":
                     current_screen = "event_calendar"
                 elif current_screen == "event_calendar":
+                    current_screen = "company_creation"
+                elif current_screen == "company_creation":
                     current_screen = "main"
 
             elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_p:
+                if event.key == pygame.K_SPACE:
                     paused = not paused
                 elif event.key == pygame.K_RIGHT:
                     idx = available_speeds.index(time_speed)
@@ -464,6 +509,8 @@ while True:
         draw_assets_screen()
     elif current_screen == "event_calendar":
         draw_event_calendar_screen()
+    elif current_screen == "company_creation":
+        draw_company_market_screen()
 
     if active_event:
         draw_event_popup(active_event)
