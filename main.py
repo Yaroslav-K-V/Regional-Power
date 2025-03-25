@@ -1,6 +1,8 @@
 import pygame
 import sys
 
+from classes.character import Character
+
 pygame.init()
 
 import datetime
@@ -29,12 +31,16 @@ small_font = pygame.font.SysFont("arial", 18)
 small_plus_font = pygame.font.SysFont("arial", 20)
 medium_plus_font = pygame.font.SysFont("arial", 30)
 medium_bold_font = pygame.font.SysFont("arial", 20, bold=True)
-
+selected_partner = None
 available_speeds = [0.5, 1, 2, 5, 10, 50]
 partners = []
 for i in range(6):
-    rect = pygame.Rect(20, 20 + i * 100, 300, 80)
-    partners.append({"name": f"А.В. Красницький", "rect": rect})
+    x = 960 + (i % 3) * 130
+    y = 340 + (i // 3) * 110
+    name = f"А.В. Красницький #{i + 1}"
+    partner = Character(name, "Бізнес-партнер", (x, y))
+    partners.append(partner)
+
 
 player = {
     "name": "Іван",
@@ -114,7 +120,6 @@ def generate_main_screen_data():
         "event_calendar": ["Найближча подія:", random.choice(sample_events)],
         "profile": [f"{player['name']}, Вік: {player['age']}",
                     f"Інтелект: {player['intelligence']} | Харизма: {player['charisma']}"],
-        "partners": ["Партнери: 6", "— Красницький, Ігоренко"],
         "log": ["Останні дії:", "— 23.03: Зустріч"],
         "ukraine_map": ["Мапа України", "Область: Херсон"]
     })
@@ -143,15 +148,17 @@ def draw_main_screen():
 
         label = small_plus_font.render(name.replace("_", " ").title(), True, BLACK)
         main_surface.blit(label, (rect.x + 10, rect.y + 10))
-
         if name == "graph":
             draw_dummy_graph(rect, surface=main_surface)
             continue
-
+        elif name == "partners":
+            for partner in partners:
+                partner.draw(main_surface, small_font, small_font)
         if name in main_screen_data:
             for i, line in enumerate(main_screen_data[name]):
                 text = small_font.render(line, True, DARK_GRAY)
                 main_surface.blit(text, (rect.x + 10, rect.y + 40 + i * 20))
+
 
 
 def update_game_time():
@@ -357,12 +364,12 @@ def draw_profile_screen():
     screen.fill(LIGHT_GRAY)
     central_panel_offset_x = 90
     for partner in partners:
-        pygame.draw.rect(screen, WHITE, partner["rect"])
-        pygame.draw.rect(screen, BLACK, partner["rect"], 2)
-        name_text = font.render(partner["name"], True, BLACK)
+        pygame.draw.rect(screen, WHITE, partner.rect)
+        pygame.draw.rect(screen, BLACK, partner.rect, 2)
+        name_text = font.render(partner.name, True, BLACK)
         role_text = font.render("Бізнес-Партнер", True, DARK_GRAY)
-        screen.blit(name_text, (partner["rect"].x + 10, partner["rect"].y + 10))
-        screen.blit(role_text, (partner["rect"].x + 10, partner["rect"].y + 35))
+        screen.blit(name_text, (partner.rect.x + 10, partner.rect.y + 10))
+        screen.blit(role_text, (partner.rect.x + 10, partner.rect.y + 35))
 
     pygame.draw.rect(screen, WHITE, (250 + central_panel_offset_x, 50, 1000, 620))
     pygame.draw.rect(screen, BLACK, (250 + central_panel_offset_x, 50, 1000, 620), 3)
@@ -394,47 +401,44 @@ def draw_text_block(text, x, y):
         screen.blit(small_plus_font.render(line, True, BLACK), (x, y + i * 22))
 
 
-def draw_partner_screen():
+def draw_partner_screen(partner):
     screen.fill(LIGHT_GRAY)
-    central_panel_offset_x = 90
-    for partner in partners:
-        pygame.draw.rect(screen, WHITE, partner["rect"])
-        pygame.draw.rect(screen, BLACK, partner["rect"], 2)
-        name_text = font.render(partner["name"], True, BLACK)
-        role_text = font.render("Бізнес-Партнер", True, DARK_GRAY)
-        screen.blit(name_text, (partner["rect"].x + 10, partner["rect"].y + 10))
-        screen.blit(role_text, (partner["rect"].x + 10, partner["rect"].y + 35))
+    offset = 90
 
-    pygame.draw.rect(screen, WHITE, (250 + central_panel_offset_x, 50, 1000, 620))
-    pygame.draw.rect(screen, BLACK, (250 + central_panel_offset_x, 50, 1000, 620), 3)
+    # Профільна панель
+    pygame.draw.rect(screen, WHITE, (250 + offset, 50, 1000, 620))
+    pygame.draw.rect(screen, BLACK, (250 + offset, 50, 1000, 620), 3)
 
-    pygame.draw.circle(screen, DARK_GRAY, (800 + central_panel_offset_x, 150), 60)
+    # Аватар
+    pygame.draw.circle(screen, DARK_GRAY, (800 + offset, 150), 60)
 
-    name = medium_plus_font.render(partner["name"] + " Вікторович", True, BLACK)
-    screen.blit(name, (300 + central_panel_offset_x, 230))
+    # Ім’я
+    name = medium_plus_font.render(partner.name + " Вікторович", True, BLACK)
+    screen.blit(name, (300 + offset, 230))
 
-    pygame.draw.rect(screen, LIGHT_GRAY, (300 + central_panel_offset_x, 280, 250, 130))
-    pygame.draw.rect(screen, LIGHT_GRAY, (570 + central_panel_offset_x, 280, 250, 130))
-    pygame.draw.rect(screen, LIGHT_GRAY, (840 + central_panel_offset_x, 280, 300, 130))
+    # Інфо-блоки
+    draw_text_block(f"Фінансовий стан\nКапітал: {partner.capital}\nАктиви: {partner.assets}\n{partner.income}", 310 + offset, 290)
+    draw_text_block(f"Відношення\nДовіра: {partner.trust}\nПідтримує: {partner.supports}", 580 + offset, 290)
+    draw_text_block(f"Імідж\nРепутація: {partner.reputation}\nВплив: {partner.influence}\nЮридичні проблеми: {partner.legal_issues}", 850 + offset, 290)
 
-    draw_text_block("Фінансовий стан\nКапітал: 3 200 000 грн\nАктиви: 4 компанії\n+15 000 грн/міс", 310 + central_panel_offset_x, 290)
-    draw_text_block("Відношення\nДовіра: 50\nПідтримує: Правих", 580 + central_panel_offset_x, 290)
-    draw_text_block("Імідж\nРепутація: 72%\nВплив: 456\nЮридичні проблеми: Так", 850 + central_panel_offset_x, 290)
+    # Лог
+    pygame.draw.rect(screen, LIGHT_GRAY, (840 + offset, 430, 380, 220))
+    pygame.draw.rect(screen, BLACK, (840 + offset, 430, 380, 220), 1)
+    screen.blit(font.render("Останні дії", True, BLACK), (850 + offset, 440))
 
-    pygame.draw.rect(screen, LIGHT_GRAY, (840 + central_panel_offset_x, 430, 380, 220))
-    pygame.draw.rect(screen, BLACK, (840 + central_panel_offset_x, 430, 380, 220), 1)
-    screen.blit(font.render("Останні дії", True, BLACK), (850 + central_panel_offset_x, 440))
+    for i, entry in enumerate(partner.log[:5]):
+        log_text = font.render(entry, True, BLACK)
+        screen.blit(log_text, (850 + offset, 470 + i * 30))
 
-    for i in range(5):
-        log_text = font.render(f"{20 - i}.03.2007 - Подія №{i + 1}", True, BLACK)
-        screen.blit(log_text, (850 + central_panel_offset_x, 470 + i * 30))
+    # Кнопки
+    pygame.draw.rect(screen, WHITE, (300 + offset, 450, 180, 40))
+    pygame.draw.rect(screen, WHITE, (500 + offset, 450, 180, 40))
+    pygame.draw.rect(screen, WHITE, (700 + offset, 450, 140, 40))
+    screen.blit(font.render("Переговори", True, BLACK), (330 + offset, 460))
+    screen.blit(font.render("Розвідка", True, BLACK), (550 + offset, 460))
+    screen.blit(font.render("Дії", True, BLACK), (750 + offset, 460))
 
-    pygame.draw.rect(screen, WHITE, (300 + central_panel_offset_x, 450, 180, 40))
-    pygame.draw.rect(screen, WHITE, (500 + central_panel_offset_x, 450, 180, 40))
-    pygame.draw.rect(screen, WHITE, (700 + central_panel_offset_x, 450, 140, 40))
-    screen.blit(font.render("Переговори", True, BLACK), (330 + central_panel_offset_x, 460))
-    screen.blit(font.render("Розвідка", True, BLACK), (550 + central_panel_offset_x, 460))
-    screen.blit(font.render("Дії", True, BLACK), (750 + central_panel_offset_x, 460))
+
 
 while True:
 
@@ -456,6 +460,12 @@ while True:
                         break
                 continue
             if current_screen == "main":
+                if current_screen == "main":
+                    for partner in partners:
+                        if partner.rect.collidepoint(event.pos):
+                            selected_partner = partner
+                            current_screen = "partner"
+                            print(f"-> Обрано партнера: {partner.name}")
                 if assets_rect.collidepoint(event.pos):
                     current_screen = "assets_w"
                 elif "event_calendar" in main_screen_data:
@@ -469,10 +479,6 @@ while True:
         elif event.type == pygame.KEYDOWN:
             if event.key == pygame.K_TAB:
                 if current_screen == "main":
-                    current_screen = "profile"
-                elif current_screen == "profile":
-                    current_screen = "partner"
-                elif current_screen == "partner":
                     current_screen = "assets_w"
                 elif current_screen == "assets_w":
                     current_screen = "event_calendar"
@@ -480,7 +486,10 @@ while True:
                     current_screen = "company_creation"
                 elif current_screen == "company_creation":
                     current_screen = "main"
-
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    current_screen = "main"
+                    selected_partner = None
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_SPACE:
                     paused = not paused
@@ -503,8 +512,8 @@ while True:
 
     elif current_screen == "profile":
         draw_profile_screen()
-    elif current_screen == "partner":
-        draw_partner_screen()
+    elif current_screen == "partner" and selected_partner:
+        draw_partner_screen(selected_partner)
     elif current_screen == "assets_w":
         draw_assets_screen()
     elif current_screen == "event_calendar":
