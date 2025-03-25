@@ -2,10 +2,15 @@ import pygame
 import sys
 
 from classes.character import Character
+from classes.player import Player
+from classes.company import Company
+from classes.company_button import CompanyButton
 
 pygame.init()
 
 import datetime
+
+
 
 game_time = datetime.datetime(2007, 3, 24, 0, 0)
 time_speed = 1.0  # 1x
@@ -42,13 +47,7 @@ for i in range(6):
     partners.append(partner)
 
 
-player = {
-    "name": "Іван",
-    "age": 32,
-    "gender": "Чоловік",
-    "intelligence": 8,
-    "charisma": 5
-}
+player = Player("Іван", 32, 8, 5)
 
 buttons = [
     {"label": "Дія", "rect": pygame.Rect(100, 450, 120, 40)},
@@ -60,6 +59,12 @@ events = [
     {"date": datetime.datetime(2007, 3, 25, 14), "title": "Зустріч з інвестором", "desc": "Обговорення майбутнього фінансування."},
     {"date": datetime.datetime(2007, 3, 26, 10), "title": "Виступ у парламенті", "desc": "Запропонована нова економічна реформа."},
     {"date": datetime.datetime(2007, 3, 28, 9),  "title": "Рада безпеки", "desc": "Термінове обговорення ситуації в регіоні."},
+]
+
+available_companies = [
+    Company("ТОВ 'ХерсонБуд'", "Будівництво", 800_000, 50_000),
+    Company("ТОВ 'АгроХолдинг'", "Сільське господарство", 650_000, 42_000),
+    Company("ТОВ 'Digital Media'", "Медіа", 950_000, 60_000),
 ]
 
 active_event = None  # Поточна активна подія
@@ -79,8 +84,8 @@ if not active_event:
 
 current_screen = "main"
 clicked = False
-money = 0
-power = 1
+
+company_buttons = []
 
 assets_rect = pygame.Rect(290, 180, 380, 130)
 
@@ -118,8 +123,8 @@ def generate_main_screen_data():
         "news": ["Останні новини:", random.choice(sample_news)],
         "assets": ["Стан активів:", random.choice(sample_assets)],
         "event_calendar": ["Найближча подія:", random.choice(sample_events)],
-        "profile": [f"{player['name']}, Вік: {player['age']}",
-                    f"Інтелект: {player['intelligence']} | Харизма: {player['charisma']}"],
+        "profile": [f"{player.name}, Вік: {player.age}",
+                    f"Інтелект: {player.intelligence} | Харизма: {player.charisma}"],
         "log": ["Останні дії:", "— 23.03: Зустріч"],
         "ukraine_map": ["Мапа України", "Область: Херсон"]
     })
@@ -136,7 +141,7 @@ def draw_main_screen():
         "news": pygame.Rect(290, 320, 380, 140),
         "assets": assets_rect,
         "event_calendar": pygame.Rect(680, 180, 250, 280),
-        "profile": pygame.Rect(950, 20, 180, 250),
+        "profile": pygame.Rect(950, 20, 250, 250),
         "partners": pygame.Rect(950, 300, 420, 280),
         "log": pygame.Rect(680, 480, 690, 100),
         "ukraine_map": pygame.Rect(20, 340, 250, 240)
@@ -167,6 +172,9 @@ def update_game_time():
     if not paused and now - last_update >= hour_interval / time_speed:
         game_time += datetime.timedelta(hours=1)
         last_update = now
+
+        if game_time.hour == 0:
+            player.apply_monthly_update()
 
 
 def draw_game_clock(x_offset=470, y_offset = 40):
@@ -234,94 +242,84 @@ def draw_dummy_graph(rect, surface=screen):
 
 
 def draw_assets_screen():
-    offset_x = 250  # зміщення праворуч
+    offset_x = 250
     screen.fill(LIGHT_GRAY)
 
-    # Заголовок вікна
     pygame.draw.rect(screen, WHITE, (offset_x + 250, 50, 1000, 620))
     pygame.draw.rect(screen, BLACK, (offset_x + 250, 50, 1000, 620), 3)
 
     title = medium_plus_font.render("Фінансовий огляд", True, BLACK)
     screen.blit(title, (offset_x + 270, 60))
 
-    # Список активів
-    assets = [
-        {"name": "ТОВ 'БудАльянс'", "type": "Компанія", "value": "1 200 000 ₴"},
-        {"name": "Квартира (Одеса)", "type": "Нерухомість", "value": "800 000 ₴"},
-        {"name": "Акції 'НафтаПлюс'", "type": "Інвестиція", "value": "400 000 ₴"},
-    ]
+    # 💰 Баланс і дохід
+    balance_text = small_plus_font.render(f"Баланс: {player.balance:,} ₴".replace(",", " "), True, BLACK)
+    income_text = small_plus_font.render(f"Дохід/міс: {player.monthly_income:,} ₴".replace(",", " "), True, BLACK)
+    screen.blit(balance_text, (offset_x + 270, 100))
+    screen.blit(income_text, (offset_x + 500, 100))
 
-    # Список пасивів
-    liabilities = [
-        {"name": "Кредит в банку", "type": "Заборгованість", "value": "-350 000 ₴"},
-        {"name": "Лізинг авто", "type": "Щомісячний платіж", "value": "-15 000 ₴/міс"},
-    ]
-
-    # Малюємо активи
-    screen.blit(font.render("Активи", True, BLACK), (offset_x + 280, 120))
-    for i, item in enumerate(assets):
-        y = 160 + i * 70
+    # 🏢 Активи
+    screen.blit(font.render("Активи", True, BLACK), (offset_x + 280, 140))
+    for i, item in enumerate(player.assets):
+        y = 180 + i * 70
         pygame.draw.rect(screen, WHITE, (offset_x + 270, y, 800, 60))
         pygame.draw.rect(screen, GRAY, (offset_x + 270, y, 800, 60), 1)
         screen.blit(small_plus_font.render(item["name"], True, BLACK), (offset_x + 290, y + 10))
         screen.blit(small_font.render(item["type"], True, DARK_GRAY), (offset_x + 290, y + 35))
-        screen.blit(small_plus_font.render(item["value"], True, BLACK), (offset_x + 950, y + 20))
+        screen.blit(small_plus_font.render(f"{item['value']:,} ₴".replace(",", " "), True, BLACK), (offset_x + 950, y + 20))
 
-    # Малюємо пасиви
-    screen.blit(font.render("Пасиви", True, BLACK), (offset_x + 280, 160 + len(assets) * 70 + 20))
+    # 💸 Пасиви
+    liabilities = [
+        {"name": "Кредит в банку", "type": "Заборгованість", "value": f"-{player.credit:,} ₴".replace(",", " ")},
+        {"name": "Щомісячні витрати", "type": "Поточні", "value": f"-{player.monthly_expenses:,} ₴/міс".replace(",", " ")},
+    ]
+
+    screen.blit(font.render("Пасиви", True, BLACK), (offset_x + 280, 180 + len(player.assets) * 70 + 20))
     for i, item in enumerate(liabilities):
-        y = 160 + len(assets) * 70 + 60 + i * 70
+        y = 180 + len(player.assets) * 70 + 60 + i * 70
         pygame.draw.rect(screen, WHITE, (offset_x + 270, y, 800, 60))
         pygame.draw.rect(screen, GRAY, (offset_x + 270, y, 800, 60), 1)
         screen.blit(small_plus_font.render(item["name"], True, BLACK), (offset_x + 290, y + 10))
         screen.blit(small_font.render(item["type"], True, DARK_GRAY), (offset_x + 290, y + 35))
         screen.blit(small_plus_font.render(item["value"], True, (200, 0, 0)), (offset_x + 950, y + 20))
 
-    # Підсумок
-    total = medium_plus_font.render("Чистий капітал: 2 035 000 ₴", True, (0, 100, 0))
-    draw_game_clock(50,40)
+    # 📊 Підсумок
+    net_worth = player.get_net_worth()
+    total = medium_plus_font.render(f"Чистий капітал: {net_worth:,} ₴".replace(",", " "), True, (0, 100, 0))
+    draw_game_clock(50, 40)
     screen.blit(total, (offset_x + 270, 620))
+
+
 
 def draw_company_market_screen():
     screen.fill(LIGHT_GRAY)
-
-    draw_game_clock(300)  # Годинник у верхній частині
-
-    # Зсув вниз, щоб не перекривало годинник
+    draw_game_clock(300)
     y_offset = 150
 
-    # Ліва панель: компанії
-    pygame.draw.rect(screen, WHITE, (50, y_offset, 1000, 520))  # Висота зменшена (620 → 520)
+    pygame.draw.rect(screen, WHITE, (50, y_offset, 1000, 520))
     pygame.draw.rect(screen, BLACK, (50, y_offset, 1000, 520), 3)
 
     title = medium_plus_font.render("Створити або купити компанію", True, BLACK)
-    screen.blit(title, (70, y_offset + 20))  # Відступ у середині панелі
+    screen.blit(title, (70, y_offset + 20))
 
-    companies = [
-        {"name": "ТОВ 'ХерсонБуд'", "sector": "Будівництво", "cost": "800 000 ₴", "income": "50 000 ₴/міс"},
-        {"name": "ТОВ 'АгроХолдинг'", "sector": "Сільське господарство", "cost": "650 000 ₴", "income": "42 000 ₴/міс"},
-        {"name": "ТОВ 'Digital Media'", "sector": "Медіа", "cost": "950 000 ₴", "income": "60 000 ₴/міс"},
-    ]
+    # Оновити список кнопок
+    company_buttons.clear()
 
-    for i, item in enumerate(companies):
-        y = y_offset + 70 + i * 120  # Зсув по Y
+    for i, company in enumerate(available_companies):
+        y = y_offset + 70 + i * 120
+
         pygame.draw.rect(screen, WHITE, (70, y, 960, 100))
         pygame.draw.rect(screen, GRAY, (70, y, 960, 100), 1)
+        screen.blit(small_plus_font.render(company.name, True, BLACK), (90, y + 10))
+        screen.blit(small_font.render(f"Сектор: {company.sector}", True, DARK_GRAY), (90, y + 40))
+        screen.blit(small_font.render(f"Вартість: {company.cost:,} ₴".replace(",", " "), True, DARK_GRAY), (90, y + 65))
+        screen.blit(small_font.render(f"Дохід: {company.income:,} ₴/міс".replace(",", " "), True, DARK_GRAY), (300, y + 65))
 
-        screen.blit(small_plus_font.render(item["name"], True, BLACK), (90, y + 10))
-        screen.blit(small_font.render(f"Сектор: {item['sector']}", True, DARK_GRAY), (90, y + 40))
-        screen.blit(small_font.render(f"Вартість: {item['cost']}", True, DARK_GRAY), (90, y + 65))
-        screen.blit(small_font.render(f"Дохід: {item['income']}", True, DARK_GRAY), (300, y + 65))
+        button = CompanyButton(company, 850, y + 30, small_plus_font)
+        company_buttons.append(button)
+        button.draw(screen)
 
-        buy_button = pygame.Rect(850, y + 30, 150, 35)
-        pygame.draw.rect(screen, GREEN, buy_button)
-        pygame.draw.rect(screen, BLACK, buy_button, 2)
-        screen.blit(small_plus_font.render("Купити", True, WHITE), (buy_button.x + 35, buy_button.y + 5))
-
-    # Права панель (залишаємо)
     pygame.draw.rect(screen, LIGHT_GRAY, (1100, 50, 250, 620))
     pygame.draw.rect(screen, GRAY, (1100, 50, 250, 620), 1)
-
 
 
 
@@ -438,7 +436,40 @@ def draw_partner_screen(partner):
     screen.blit(font.render("Розвідка", True, BLACK), (550 + offset, 460))
     screen.blit(font.render("Дії", True, BLACK), (750 + offset, 460))
 
+def draw_player_screen(player):
+    screen.fill(LIGHT_GRAY)
+    offset = 90
 
+    pygame.draw.rect(screen, WHITE, (250 + offset, 50, 1000, 620))
+    pygame.draw.rect(screen, BLACK, (250 + offset, 50, 1000, 620), 3)
+
+    pygame.draw.circle(screen, DARK_GRAY, (800 + offset, 150), 60)
+
+    name = medium_plus_font.render(player.name, True, BLACK)
+    screen.blit(name, (300 + offset, 230))
+
+    draw_text_block(
+        f"Фінансовий стан\nБаланс: {player.balance} ₴\nАктиви: {len(player.assets)}\nДоходи: {player.monthly_income}",
+        310 + offset, 290
+    )
+
+    draw_text_block(
+        f"Характеристики\nІнтелект: {player.intelligence}\nХаризма: {player.charisma}",
+        580 + offset, 290
+    )
+
+    draw_text_block(
+        f"Статус\nРоль: Гравець\nВік: {player.age}",
+        850 + offset, 290
+    )
+
+    pygame.draw.rect(screen, LIGHT_GRAY, (840 + offset, 430, 380, 220))
+    pygame.draw.rect(screen, BLACK, (840 + offset, 430, 380, 220), 1)
+    screen.blit(font.render("Останні дії", True, BLACK), (850 + offset, 440))
+
+    for i, entry in enumerate(player.log[:5]):
+        log_text = font.render(entry, True, BLACK)
+        screen.blit(log_text, (850 + offset, 470 + i * 30))
 
 while True:
 
@@ -459,21 +490,40 @@ while True:
                         active_event = None  # Закриваємо івент
                         break
                 continue
+
+            elif current_screen == "company_creation":
+                for btn in company_buttons:
+                    if btn.is_clicked(event.pos):
+                        if player.balance >= btn.company.cost:
+                            player.balance -= btn.company.cost
+                            player.assets.append({
+                                "name": btn.company.name,
+                                "type": btn.company.sector,
+                                "value": btn.company.cost
+                            })
+                            player.monthly_income += btn.company.income
+                            available_companies.remove(btn.company)
+                            company_buttons.clear()
+                            main_needs_redraw = True
+
+                            timestamp = game_time.strftime("%d.%m.%Y %H:%M")
+                            player.log.insert(0, f"{timestamp} — Куплено компанію: {btn.company.name}")
+                        else:
+                            print("❌ Недостатньо коштів")
             if current_screen == "main":
-                if current_screen == "main":
-                    for partner in partners:
-                        if partner.rect.collidepoint(event.pos):
-                            selected_partner = partner
-                            current_screen = "partner"
-                            print(f"-> Обрано партнера: {partner.name}")
+                for partner in partners:
+                    if partner.rect.collidepoint(event.pos):
+                        selected_partner = partner
+                        current_screen = "partner"
+                        print(f"-> Обрано партнера: {partner.name}")
                 if assets_rect.collidepoint(event.pos):
                     current_screen = "assets_w"
-                elif "event_calendar" in main_screen_data:
-                    rect = pygame.Rect(680, 180, 250, 280)  # координати блока event_calendar
-                    if rect.collidepoint(event.pos):
-                        current_screen = "event_calendar"
-
-
+                event_calendar_rect = pygame.Rect(680, 180, 250, 280)
+                if event_calendar_rect.collidepoint(event.pos):
+                    current_screen = "event_calendar"
+                profile_rect = pygame.Rect(950, 20, 180, 250)
+                if profile_rect.collidepoint(event.pos):
+                    current_screen = "player_profile"
 
 
         elif event.type == pygame.KEYDOWN:
@@ -486,21 +536,22 @@ while True:
                     current_screen = "company_creation"
                 elif current_screen == "company_creation":
                     current_screen = "main"
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
+            elif event.key == pygame.K_ESCAPE:
                     current_screen = "main"
                     selected_partner = None
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_SPACE:
+            elif event.key == pygame.K_SPACE:
                     paused = not paused
-                elif event.key == pygame.K_RIGHT:
-                    idx = available_speeds.index(time_speed)
-                    if idx < len(available_speeds) - 1:
-                        time_speed = available_speeds[idx + 1]
-                elif event.key == pygame.K_LEFT:
-                    idx = available_speeds.index(time_speed)
-                    if idx > 0:
-                        time_speed = available_speeds[idx - 1]
+            elif event.key == pygame.K_RIGHT:
+                idx = available_speeds.index(time_speed)
+                if idx < len(available_speeds) - 1:
+                    time_speed = available_speeds[idx + 1]
+            elif event.key == pygame.K_LEFT:
+                idx = available_speeds.index(time_speed)
+                if idx > 0:
+                    time_speed = available_speeds[idx - 1]
+        elif event.type == pygame.MOUSEMOTION:
+            for btn in company_buttons:
+                btn.check_hover(event.pos)
 
     if current_screen == "main":
         if main_needs_redraw:
@@ -520,7 +571,8 @@ while True:
         draw_event_calendar_screen()
     elif current_screen == "company_creation":
         draw_company_market_screen()
-
+    elif current_screen == "player_profile":
+        draw_player_screen(player)
     if active_event:
         draw_event_popup(active_event)
 
