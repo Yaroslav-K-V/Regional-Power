@@ -9,7 +9,13 @@ from classes.company_button import CompanyButton
 pygame.init()
 
 import datetime
-
+popup_rect = None
+scroll_offset_assets = 0
+scroll_offset_liabilities = 0
+selected_fin_item = None
+visible_assets = []
+visible_liabilities = []
+assets_rect = pygame.Rect(290, 180, 380, 130)
 
 
 game_time = datetime.datetime(2007, 3, 24, 0, 0)
@@ -87,7 +93,9 @@ clicked = False
 
 company_buttons = []
 
-assets_rect = pygame.Rect(290, 180, 380, 130)
+assets_area = pygame.Rect(0, 0, 0, 0)
+liabilities_area = pygame.Rect(0, 0, 0, 0)
+
 
 main_screen_data = {}
 
@@ -139,7 +147,7 @@ def draw_main_screen():
         "map": pygame.Rect(20, 20, 250, 300),
         "graph": pygame.Rect(290, 20, 250, 150),
         "news": pygame.Rect(290, 320, 380, 140),
-        "assets": assets_rect,
+        "assets": pygame.Rect(290, 180, 380, 130),
         "event_calendar": pygame.Rect(680, 180, 250, 280),
         "profile": pygame.Rect(950, 20, 250, 250),
         "partners": pygame.Rect(950, 300, 420, 280),
@@ -242,51 +250,121 @@ def draw_dummy_graph(rect, surface=screen):
 
 
 def draw_assets_screen():
+    global selected_fin_item
     offset_x = 250
     screen.fill(LIGHT_GRAY)
 
     pygame.draw.rect(screen, WHITE, (offset_x + 250, 50, 1000, 620))
     pygame.draw.rect(screen, BLACK, (offset_x + 250, 50, 1000, 620), 3)
 
+    global assets_area, liabilities_area
+    assets_area = pygame.Rect(offset_x + 270, 200, 800, 210)
+    liabilities_area = pygame.Rect(offset_x + 270, 440, 800, 210)
+
     title = medium_plus_font.render("Фінансовий огляд", True, BLACK)
     screen.blit(title, (offset_x + 270, 60))
 
-    # 💰 Баланс і дохід
     balance_text = small_plus_font.render(f"Баланс: {player.balance:,} ₴".replace(",", " "), True, BLACK)
     income_text = small_plus_font.render(f"Дохід/міс: {player.monthly_income:,} ₴".replace(",", " "), True, BLACK)
     screen.blit(balance_text, (offset_x + 270, 100))
     screen.blit(income_text, (offset_x + 500, 100))
 
-    # 🏢 Активи
-    screen.blit(font.render("Активи", True, BLACK), (offset_x + 280, 140))
-    for i, item in enumerate(player.assets):
-        y = 180 + i * 70
-        pygame.draw.rect(screen, WHITE, (offset_x + 270, y, 800, 60))
-        pygame.draw.rect(screen, GRAY, (offset_x + 270, y, 800, 60), 1)
-        screen.blit(small_plus_font.render(item["name"], True, BLACK), (offset_x + 290, y + 10))
-        screen.blit(small_font.render(item["type"], True, DARK_GRAY), (offset_x + 290, y + 35))
-        screen.blit(small_plus_font.render(f"{item['value']:,} ₴".replace(",", " "), True, BLACK), (offset_x + 950, y + 20))
+    # --- АКТИВИ ---
+    pygame.draw.rect(screen, WHITE, assets_area)
+    pygame.draw.rect(screen, GRAY, assets_area, 1)
+    screen.blit(font.render("Активи", True, BLACK), (assets_area.x, assets_area.y - 40))
 
-    # 💸 Пасиви
+    asset_surface = pygame.Surface((assets_area.width, len(player.assets) * 70), pygame.SRCALPHA)
+    global visible_assets
+    visible_assets.clear()
+
+    for i, item in enumerate(player.assets):
+        y = i * 70 - scroll_offset_assets
+        item_rect = pygame.Rect(0, i * 70, assets_area.width, 60)
+        if y + 70 > 0 and y < assets_area.height:
+            pygame.draw.rect(asset_surface, WHITE, item_rect)
+            pygame.draw.rect(asset_surface, GRAY, item_rect, 1)
+            pygame.draw.rect(asset_surface, (240, 240, 255), item_rect, 0)
+
+            name = small_plus_font.render(item["name"], True, BLACK)
+            typ = small_font.render(item["type"], True, DARK_GRAY)
+            val = small_plus_font.render(f"{item['value']:,} ₴".replace(",", " "), True, BLACK)
+
+            asset_surface.blit(name, (20, item_rect.y + 10))
+            asset_surface.blit(typ, (20, item_rect.y + 35))
+            asset_surface.blit(val, (asset_surface.get_width() - 180, item_rect.y + 20))
+
+            visible_assets.append((item, pygame.Rect(assets_area.x, assets_area.y + y, item_rect.width, item_rect.height)))
+
+    screen.blit(asset_surface, assets_area.topleft, area=pygame.Rect(0, scroll_offset_assets, assets_area.width, assets_area.height))
+
+    if asset_surface.get_height() > assets_area.height:
+        scroll_height = max(40, assets_area.height * assets_area.height // asset_surface.get_height())
+        scroll_y = assets_area.y + scroll_offset_assets * assets_area.height // asset_surface.get_height()
+        pygame.draw.rect(screen, DARK_GRAY, (assets_area.right - 10, assets_area.y, 6, assets_area.height))
+        pygame.draw.rect(screen, GRAY, (assets_area.right - 10, scroll_y, 6, scroll_height))
+
+    global liabilities
     liabilities = [
         {"name": "Кредит в банку", "type": "Заборгованість", "value": f"-{player.credit:,} ₴".replace(",", " ")},
         {"name": "Щомісячні витрати", "type": "Поточні", "value": f"-{player.monthly_expenses:,} ₴/міс".replace(",", " ")},
+        {"name": "Кредит в банку", "type": "Заборгованість", "value": f"-{player.credit:,} ₴".replace(",", " ")},
+        {"name": "Щомісячні витрати", "type": "Поточні","value": f"-{player.monthly_expenses:,} ₴/міс".replace(",", " ")},
+        {"name": "Кредит в банку", "type": "Заборгованість", "value": f"-{player.credit:,} ₴".replace(",", " ")},
+        {"name": "Щомісячні витрати", "type": "Поточні","value": f"-{player.monthly_expenses:,} ₴/міс".replace(",", " ")},
+        {"name": "Кредит в банку", "type": "Заборгованість", "value": f"-{player.credit:,} ₴".replace(",", " ")},
+        {"name": "Щомісячні витрати", "type": "Поточні",
+         "value": f"-{player.monthly_expenses:,} ₴/міс".replace(",", " ")}
     ]
 
-    screen.blit(font.render("Пасиви", True, BLACK), (offset_x + 280, 180 + len(player.assets) * 70 + 20))
-    for i, item in enumerate(liabilities):
-        y = 180 + len(player.assets) * 70 + 60 + i * 70
-        pygame.draw.rect(screen, WHITE, (offset_x + 270, y, 800, 60))
-        pygame.draw.rect(screen, GRAY, (offset_x + 270, y, 800, 60), 1)
-        screen.blit(small_plus_font.render(item["name"], True, BLACK), (offset_x + 290, y + 10))
-        screen.blit(small_font.render(item["type"], True, DARK_GRAY), (offset_x + 290, y + 35))
-        screen.blit(small_plus_font.render(item["value"], True, (200, 0, 0)), (offset_x + 950, y + 20))
+    pygame.draw.rect(screen, WHITE, liabilities_area)
+    pygame.draw.rect(screen, GRAY, liabilities_area, 1)
+    screen.blit(font.render("Пасиви", True, BLACK), (liabilities_area.x, liabilities_area.y - 40))
 
-    # 📊 Підсумок
+    liabilities_surface = pygame.Surface((liabilities_area.width, len(liabilities) * 70), pygame.SRCALPHA)
+    global visible_liabilities
+    visible_liabilities.clear()
+
+    for i, item in enumerate(liabilities):
+        y = i * 70 - scroll_offset_liabilities
+        item_rect = pygame.Rect(0, i * 70, liabilities_area.width, 60)
+        if y + 70 > 0 and y < liabilities_area.height:
+            pygame.draw.rect(liabilities_surface, WHITE, item_rect)
+            pygame.draw.rect(liabilities_surface, GRAY, item_rect, 1)
+            name = small_plus_font.render(item["name"], True, BLACK)
+            typ = small_font.render(item["type"], True, DARK_GRAY)
+            val = small_plus_font.render(item["value"], True, (200, 0, 0))
+
+            liabilities_surface.blit(name, (20, item_rect.y + 10))
+            liabilities_surface.blit(typ, (20, item_rect.y + 35))
+            liabilities_surface.blit(val, (liabilities_surface.get_width() - 180, item_rect.y + 20))
+
+            visible_liabilities.append((item, pygame.Rect(liabilities_area.x, liabilities_area.y + y, item_rect.width, item_rect.height)))
+
+    screen.blit(liabilities_surface, liabilities_area.topleft, area=pygame.Rect(0, scroll_offset_liabilities, liabilities_area.width, liabilities_area.height))
+
+    if liabilities_surface.get_height() > liabilities_area.height:
+        scroll_height = max(40, liabilities_area.height * liabilities_area.height // liabilities_surface.get_height())
+        scroll_y = liabilities_area.y + scroll_offset_liabilities * liabilities_area.height // liabilities_surface.get_height()
+        pygame.draw.rect(screen, DARK_GRAY, (liabilities_area.right - 10, liabilities_area.y, 6, liabilities_area.height))
+        pygame.draw.rect(screen, GRAY, (liabilities_area.right - 10, scroll_y, 6, scroll_height))
+
     net_worth = player.get_net_worth()
     total = medium_plus_font.render(f"Чистий капітал: {net_worth:,} ₴".replace(",", " "), True, (0, 100, 0))
     draw_game_clock(50, 40)
-    screen.blit(total, (offset_x + 270, 620))
+    screen.blit(total, (offset_x + 270, 680))
+
+    if selected_fin_item:
+        global popup_rect
+        popup_rect = pygame.Rect(400, 250, 600, 200)
+        pygame.draw.rect(screen, WHITE, popup_rect)
+        pygame.draw.rect(screen, BLACK, popup_rect, 2)
+        screen.blit(medium_plus_font.render("Деталі об'єкта:", True, BLACK), (popup_rect.x + 20, popup_rect.y + 20))
+
+        for i, (k, v) in enumerate(selected_fin_item.items()):
+            txt = small_plus_font.render(f"{k}: {v}", True, DARK_GRAY)
+            screen.blit(txt, (popup_rect.x + 20, popup_rect.y + 60 + i * 30))
+
 
 
 
@@ -481,7 +559,15 @@ while True:
             pygame.quit()
             sys.exit()
 
-
+        elif event.type == pygame.MOUSEWHEEL:
+            if current_screen == "assets_w":
+                mouse_pos = pygame.mouse.get_pos()
+                if assets_area.collidepoint(mouse_pos):
+                    scroll_offset_assets = max(0, min(scroll_offset_assets - event.y * 30,
+                                                      max(0, len(player.assets) * 70 - assets_area.height)))
+                elif liabilities_area.collidepoint(mouse_pos):
+                    scroll_offset_liabilities = max(0, min(scroll_offset_liabilities - event.y * 30,
+                                                           max(0, len(liabilities) * 70 - liabilities_area.height)))
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
             if active_event:
@@ -490,6 +576,16 @@ while True:
                         active_event = None  # Закриваємо івент
                         break
                 continue
+
+            elif current_screen == "assets_w":
+                if selected_fin_item and popup_rect and not popup_rect.collidepoint(event.pos):
+                    selected_fin_item = None  # Закрити попап, якщо клік поза ним
+                else:
+                    for item, rect in visible_assets + visible_liabilities:
+                        if rect.collidepoint(event.pos):
+                            selected_fin_item = item
+                            break
+
 
             elif current_screen == "company_creation":
                 for btn in company_buttons:
@@ -510,6 +606,11 @@ while True:
                             player.log.insert(0, f"{timestamp} — Куплено компанію: {btn.company.name}")
                         else:
                             print("❌ Недостатньо коштів")
+            elif current_screen == "assets_w":
+                for item, rect in visible_assets + visible_liabilities:
+                    if rect.collidepoint(event.pos):
+                        selected_fin_item = item
+                        break
             if current_screen == "main":
                 for partner in partners:
                     if partner.rect.collidepoint(event.pos):
@@ -549,6 +650,13 @@ while True:
                 idx = available_speeds.index(time_speed)
                 if idx > 0:
                     time_speed = available_speeds[idx - 1]
+            elif event.key == pygame.K_ESCAPE:
+                if selected_fin_item:
+                    selected_fin_item = None
+                else:
+                    current_screen = "main"
+                    selected_partner = None
+
         elif event.type == pygame.MOUSEMOTION:
             for btn in company_buttons:
                 btn.check_hover(event.pos)
