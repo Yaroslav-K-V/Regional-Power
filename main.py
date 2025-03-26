@@ -19,9 +19,9 @@ assets_rect = pygame.Rect(290, 180, 380, 130)
 
 
 game_time = datetime.datetime(2007, 3, 24, 0, 0)
-time_speed = 1.0  # 1x
+time_speed = 1.0
 paused = False
-hour_interval = 1_250  # 5 секунд (в мілісекундах)
+hour_interval = 1_250
 last_update = pygame.time.get_ticks()
 
 WIDTH, HEIGHT = 1400, 800
@@ -52,8 +52,12 @@ for i in range(6):
     partner = Character(name, "Бізнес-партнер", (x, y))
     partners.append(partner)
 
-
+last_updated_month = -1
 player = Player("Іван", 32, 8, 5)
+
+balance_history = []
+MAX_HISTORY_POINTS = 30
+
 
 buttons = [
     {"label": "Дія", "rect": pygame.Rect(100, 450, 120, 40)},
@@ -175,14 +179,29 @@ def draw_main_screen():
 
 
 def update_game_time():
-    global game_time, last_update
+    global game_time, last_update, last_updated_month, main_needs_redraw
     now = pygame.time.get_ticks()
     if not paused and now - last_update >= hour_interval / time_speed:
         game_time += datetime.timedelta(hours=1)
         last_update = now
 
-        if game_time.hour == 0:
+        if game_time.day == 1 and game_time.month != last_updated_month:
+            print(f"✅ Місяць оновлено: {game_time.month}, оновлюємо баланс та графік.")
             player.apply_monthly_update()
+            update_balance_history()
+            last_updated_month = game_time.month
+            if current_screen == "main":
+                main_needs_redraw = True
+            else:
+                main_needs_redraw = True
+
+
+def update_balance_history():
+    print("Додаємо точку в історію балансу!")
+    balance_history.append(player.balance)
+    if len(balance_history) > MAX_HISTORY_POINTS:
+        balance_history.pop(0)
+
 
 
 def draw_game_clock(x_offset=470, y_offset = 40):
@@ -233,20 +252,44 @@ def draw_event_calendar_screen():
 
 
 def draw_dummy_graph(rect, surface=screen):
+    padding_top = 20
+    padding_bottom = 30
+    padding_x = 20
+
+    graph_width = rect.width - 2 * padding_x
+    graph_height = rect.height - padding_top - padding_bottom
+
+    pygame.draw.rect(surface, WHITE, rect)
     for i in range(6):
-        y = rect.y + 20 + i * 20
-        pygame.draw.line(surface, GRAY, (rect.x + 5, y), (rect.x + rect.width - 5, y), 1)
+        y = rect.y + padding_top + i * (graph_height // 5)
+        pygame.draw.line(surface, GRAY, (rect.x + padding_x, y), (rect.x + rect.width - padding_x, y), 1)
 
-    points = [100, 80, 90, 110, 130, 120, 140]
-    for i in range(len(points) - 1):
-        x1 = rect.x + 20 + i * 30
-        y1 = rect.y + rect.height - points[i] * 0.4
-        x2 = rect.x + 20 + (i + 1) * 30
-        y2 = rect.y + rect.height - points[i + 1] * 0.4
-        pygame.draw.line(surface, BLUE, (x1, y1), (x2, y2), 3)
+    if len(balance_history) < 2:
+        surface.blit(small_font.render("Недостатньо даних", True, DARK_GRAY), (rect.x + 10, rect.y + rect.height - 20))
+        return
 
-    surface.blit(small_font.render("Графік популярності", True, DARK_GRAY), (rect.x + 10, rect.y + rect.height - 20))
+    points = balance_history[-MAX_HISTORY_POINTS:]
+    min_val = min(points)
+    max_val = max(points)
+    range_val = max(1, max_val - min_val)
+    scaled = [(p - min_val) / range_val for p in points]
 
+    step_x = graph_width / (len(scaled) - 1)
+
+    for i in range(len(scaled) - 1):
+        x1 = int(rect.x + padding_x + i * step_x)
+        y1 = int(rect.y + padding_top + graph_height * (1 - scaled[i]))
+        x2 = int(rect.x + padding_x + (i + 1) * step_x)
+        y2 = int(rect.y + padding_top + graph_height * (1 - scaled[i + 1]))
+        pygame.draw.line(surface, BLUE, (x1, y1), (x2, y2), 2)
+
+    min_text = small_font.render(f"{min_val:,} ₴".replace(",", " "), True, DARK_GRAY)
+    max_text = small_font.render(f"{max_val:,} ₴".replace(",", " "), True, DARK_GRAY)
+    surface.blit(max_text, (rect.x + 5, rect.y + padding_top - 15))
+    surface.blit(min_text, (rect.x + 5, rect.y + padding_top + graph_height))
+
+    surface.blit(small_font.render("Баланс гравця (історія)", True, DARK_GRAY), (rect.x + 10, rect.y + rect.height - 20))
+    print("Balance history:", balance_history)
 
 
 def draw_assets_screen():
@@ -277,7 +320,6 @@ def draw_assets_screen():
     asset_surface = pygame.Surface((assets_area.width, len(player.assets) * 70), pygame.SRCALPHA)
     global visible_assets
     visible_assets.clear()
-
     for i, item in enumerate(player.assets):
         y = i * 70 - scroll_offset_assets
         item_rect = pygame.Rect(0, i * 70, assets_area.width, 60)
@@ -406,11 +448,9 @@ def draw_event_popup(event):
     pygame.draw.rect(screen, WHITE, popup_rect)
     pygame.draw.rect(screen, BLACK, popup_rect, 3)
 
-    # Заголовок
     title = medium_plus_font.render(event["title"], True, BLACK)
     screen.blit(title, (popup_rect.x + 20, popup_rect.y + 20))
 
-    # Текст
     lines = event["text"].split("\n")
     for i, line in enumerate(lines):
         txt = small_plus_font.render(line, True, BLACK)
@@ -506,7 +546,6 @@ def draw_partner_screen(partner):
         log_text = font.render(entry, True, BLACK)
         screen.blit(log_text, (850 + offset, 470 + i * 30))
 
-    # Кнопки
     pygame.draw.rect(screen, WHITE, (300 + offset, 450, 180, 40))
     pygame.draw.rect(screen, WHITE, (500 + offset, 450, 180, 40))
     pygame.draw.rect(screen, WHITE, (700 + offset, 450, 140, 40))
@@ -579,7 +618,7 @@ while True:
 
             elif current_screen == "assets_w":
                 if selected_fin_item and popup_rect and not popup_rect.collidepoint(event.pos):
-                    selected_fin_item = None  # Закрити попап, якщо клік поза ним
+                    selected_fin_item = None
                 else:
                     for item, rect in visible_assets + visible_liabilities:
                         if rect.collidepoint(event.pos):
@@ -604,8 +643,9 @@ while True:
 
                             timestamp = game_time.strftime("%d.%m.%Y %H:%M")
                             player.log.insert(0, f"{timestamp} — Куплено компанію: {btn.company.name}")
+                            update_balance_history()
                         else:
-                            print("❌ Недостатньо коштів")
+                            print("Недостатньо коштів")
             elif current_screen == "assets_w":
                 for item, rect in visible_assets + visible_liabilities:
                     if rect.collidepoint(event.pos):
@@ -656,6 +696,7 @@ while True:
                 else:
                     current_screen = "main"
                     selected_partner = None
+                    main_needs_redraw = True
 
         elif event.type == pygame.MOUSEMOTION:
             for btn in company_buttons:
