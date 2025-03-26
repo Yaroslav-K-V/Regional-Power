@@ -23,7 +23,10 @@ class Company:
         self.log = []
 
     def calculate_real_income(self):
-        return int(self.income * self.efficiency)
+        max_employees = 50
+        effective_employees = min(self.employees, max_employees)
+        multiplier = effective_employees / 10
+        return int(self.income * multiplier * self.efficiency)
 
     def calculate_net_income(self):
         return self.calculate_real_income() - self.expenses - self.debt_payment()

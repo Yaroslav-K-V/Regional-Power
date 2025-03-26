@@ -446,6 +446,15 @@ def draw_company_manage_screen(company):
         log_line = small_font.render(f"— {line}", True, DARK_GRAY)
         screen.blit(log_line, (660, 150 + i * 28))
 
+    company.manage_btns = []
+    for label, (x, y) in button_defs:
+        rect = pygame.Rect(x, y, 180, 40)
+        pygame.draw.rect(screen, WHITE, rect)
+        pygame.draw.rect(screen, BLACK, rect, 2)
+        screen.blit(small_plus_font.render(label, True, BLACK), (x + 10, y + 10))
+        company.manage_btns.append((label, rect))
+
+
 def draw_asset_popup(item, anchor_y=260):
     global popup_rect
 
@@ -690,6 +699,27 @@ while True:
                         break
                 continue
 
+            elif current_screen == "company_manage" and selected_company:
+                mouse_x, mouse_y = event.pos
+
+                def is_clicked(rect):
+                    return rect.collidepoint(mouse_x, mouse_y)
+
+                if hasattr(selected_company, "manage_btns"):
+                    for label, rect in selected_company.manage_btns:
+                        if is_clicked(rect):
+                            if label == "+ Найняти":
+                                selected_company.hire_employees(1)
+                            elif label == "- Звільнити":
+                                selected_company.fire_employees(1)
+                            elif label == "⬆️ Ефективність":
+                                selected_company.change_efficiency(0.1)
+                            elif label == "⬇️ Ефективність":
+                                selected_company.change_efficiency(-0.1)
+                            elif label == "💸 Кредит +50K":
+                                selected_company.take_loan(50_000)
+                            elif label == "🏦 Погасити 50K":
+                                selected_company.repay_loan(50_000)
 
             elif current_screen == "assets_w":
                 if selected_fin_item and popup_rect and popup_rect.collidepoint(event.pos):
@@ -712,11 +742,6 @@ while True:
                             if rect.collidepoint(event.pos):
                                 selected_fin_item = item
                                 break
-
-
-
-
-
 
             elif current_screen == "company_creation":
                 for btn in company_buttons:
