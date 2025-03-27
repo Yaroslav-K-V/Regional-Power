@@ -32,7 +32,6 @@ class Company:
         return self.calculate_real_income() - self.expenses - self.debt_payment()
 
     def debt_payment(self):
-        # Можна змінити, зараз просто 5% від боргу як щомісячна виплата
         return int(self.debt * 0.05)
 
     def monthly_update(self):

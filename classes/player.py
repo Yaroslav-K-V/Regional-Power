@@ -1,4 +1,5 @@
 from classes.company import Company
+from classes.real_estate import *
 
 class Player:
     def __init__(self, name, age, intelligence, charisma):
@@ -7,15 +8,15 @@ class Player:
         self.intelligence = intelligence
         self.charisma = charisma
 
-        # Економіка
         self.balance = 350000
-        self.credit = 200000
         self.monthly_income = 120000
         self.monthly_expenses = 30000
 
+        self.loans = []
+
         self.assets = [
             Company("ТОВ 'ХерсонБуд'", "Будівництво", 800_000, 50_000),
-            {"name": "Квартира в Києві", "type": "Нерухомість", "value": 950_000},
+            ResidentialProperty("Квартира в Києві","Кихїв",300000,3000,0)
         ]
 
         self.log = []
@@ -27,10 +28,20 @@ class Player:
                 total += a.cost
             elif isinstance(a, dict):
                 total += a.get("value", 0)
-        return total - self.credit
+        return total
 
     def apply_monthly_update(self):
         company_income = 0
+        loan_payment_total = 0
+        for loan in self.loans[:]:
+            payment = loan.apply_monthly_payment()
+            self.balance -= payment
+            loan_payment_total += payment
+            if loan.months_remaining <= 0 or loan.remaining_balance <= 0:
+                self.loans.remove(loan)
+
+        if loan_payment_total > 0:
+            self.log.insert(0, f"Платежі по кредитах: -{loan_payment_total:,} ₴".replace(",", " "))
         for a in self.assets:
             if isinstance(a, Company):
                 net_income = a.calculate_net_income()

@@ -5,9 +5,10 @@ from classes.character import Character
 from classes.player import Player
 from classes.company import Company
 from classes.company_button import CompanyButton
-from resources import load_images
+from resources import *
 from mechanics.company_generation import generate_company_list
 from classes.real_estate import *
+from classes.loan import *
 
 available_companies = generate_company_list(10)
 
@@ -80,7 +81,14 @@ events = [
     {"date": datetime.datetime(2007, 3, 28, 9),  "title": "Рада безпеки", "desc": "Термінове обговорення ситуації в регіоні."},
 ]
 
-active_event = None  # Поточна активна подія
+new_loan = Loan("ПриватБанк", 100_000, 0.15, 12)
+player.loans.append(new_loan)
+player.balance += new_loan.principal
+player.log.insert(0, f"{game_time.strftime('%d.%m.%Y')} — Отримано кредит 100 000 ₴ від {new_loan.lender}")
+
+
+active_event = None
+selected_real_estate = selected_fin_item
 
 if not active_event:
     active_event = {
@@ -173,7 +181,6 @@ def generate_main_screen_data():
 
 generate_main_screen_data()
 
-
 def draw_main_screen():
     main_surface.fill(LIGHT_GRAY)
 
@@ -207,8 +214,6 @@ def draw_main_screen():
                 text = small_font.render(line, True, DARK_GRAY)
                 main_surface.blit(text, (rect.x + 10, rect.y + 40 + i * 20))
 
-
-
 def update_game_time():
     global game_time, last_update, last_updated_month, main_needs_redraw
     now = pygame.time.get_ticks()
@@ -226,14 +231,11 @@ def update_game_time():
             else:
                 main_needs_redraw = True
 
-
 def update_balance_history():
     print("Додаємо точку в історію балансу!")
     balance_history.append(player.balance)
     if len(balance_history) > MAX_HISTORY_POINTS:
         balance_history.pop(0)
-
-
 
 def draw_game_clock(x_offset=470, y_offset = 40):
     ukr_months = [
@@ -255,7 +257,6 @@ def draw_game_clock(x_offset=470, y_offset = 40):
     if paused:
         paused_label = medium_bold_font.render("", True, (200, 0, 0))
         screen.blit(paused_label, (x_offset + 100 + len(available_speeds) * 50 + 20, y_offset))
-
 
 def draw_event_calendar_screen():
     screen.fill(LIGHT_GRAY)
@@ -280,7 +281,6 @@ def draw_event_calendar_screen():
     pygame.draw.rect(screen, WHITE, back_btn)
     pygame.draw.rect(screen, BLACK, back_btn, 1)
     screen.blit(small_plus_font.render("← Назад", True, BLACK), (60, HEIGHT - 50))
-
 
 def draw_dummy_graph(rect, surface=screen):
     padding_top = 20
@@ -322,23 +322,22 @@ def draw_dummy_graph(rect, surface=screen):
     surface.blit(small_font.render("Баланс гравця (історія)", True, DARK_GRAY), (rect.x + 10, rect.y + rect.height - 20))
     print("Balance history:", balance_history)
 
-
 def draw_assets_screen():
     global selected_fin_item, popup_rect
     screen.fill(LIGHT_GRAY)
     offset_x = 250
 
-    # Основна панель
     panel_rect = pygame.Rect(offset_x + 250, 50, 1000, 620)
     pygame.draw.rect(screen, WHITE, panel_rect)
     pygame.draw.rect(screen, BLACK, panel_rect, 3)
 
-    # Заголовки
     screen.blit(medium_plus_font.render("Фінансовий огляд", True, BLACK), (offset_x + 270, 60))
     screen.blit(small_plus_font.render(f"Баланс: {player.balance:,} ₴".replace(",", " "), True, BLACK), (offset_x + 270, 100))
     screen.blit(small_plus_font.render(f"Дохід/міс: {player.monthly_income:,} ₴".replace(",", " "), True, BLACK), (offset_x + 500, 100))
 
-    # --- АКТИВИ ---
+    global liabilities
+    liabilities = player.loans[:]
+
     global assets_area, liabilities_area
     assets_area = pygame.Rect(offset_x + 270, 200, 800, 210)
     pygame.draw.rect(screen, WHITE, assets_area)
@@ -368,7 +367,6 @@ def draw_assets_screen():
             type_text = item["type"]
             value_text = f"{item['value']:,} ₴".replace(",", " ")
 
-        # Рендер
         asset_surface.blit(small_plus_font.render(name_text, True, BLACK), (20, item_y + 10))
         asset_surface.blit(small_font.render(type_text, True, DARK_GRAY), (20, item_y + 35))
         asset_surface.blit(small_plus_font.render(value_text, True, BLACK), (asset_surface.get_width() - 180, item_y + 20))
@@ -383,17 +381,14 @@ def draw_assets_screen():
         pygame.draw.rect(screen, DARK_GRAY, (assets_area.right - 10, assets_area.y, 6, assets_area.height))
         pygame.draw.rect(screen, GRAY, (assets_area.right - 10, scroll_y, 6, scroll_height))
 
-    # --- ПАСИВИ ---
     liabilities_area = pygame.Rect(offset_x + 270, 440, 800, 210)
     pygame.draw.rect(screen, WHITE, liabilities_area)
     pygame.draw.rect(screen, GRAY, liabilities_area, 1)
     screen.blit(font.render("Пасиви", True, BLACK), (liabilities_area.x, liabilities_area.y - 40))
 
-    global liabilities
-    liabilities = [
-    ]
-
     liabilities_surface = pygame.Surface((liabilities_area.width, len(liabilities) * 70), pygame.SRCALPHA)
+    visible_liabilities.clear()
+
     visible_liabilities.clear()
 
     for i, item in enumerate(liabilities):
@@ -402,11 +397,23 @@ def draw_assets_screen():
         pygame.draw.rect(liabilities_surface, WHITE, item_rect)
         pygame.draw.rect(liabilities_surface, GRAY, item_rect, 1)
 
-        liabilities_surface.blit(small_plus_font.render(item["name"], True, BLACK), (20, item_y + 10))
-        liabilities_surface.blit(small_font.render(item["type"], True, DARK_GRAY), (20, item_y + 35))
-        liabilities_surface.blit(small_plus_font.render(item["value"], True, (200, 0, 0)), (liabilities_surface.get_width() - 180, item_y + 20))
+        if isinstance(item, Loan):
+            name = f"Кредит від {item.lender}"
+            type_info = f"{item.interest_rate * 100:.1f}% на {item.term_months} міс"
+            value = f"{item.remaining_balance:,.0f} ₴".replace(",", " ")
+        else:
+            name = item["name"]
+            type_info = item["type"]
+            value = item["value"]
 
-        visible_liabilities.append((item, pygame.Rect(liabilities_area.x, liabilities_area.y + item_y - scroll_offset_liabilities, item_rect.width, item_rect.height)))
+        liabilities_surface.blit(small_plus_font.render(name, True, BLACK), (20, item_y + 10))
+        liabilities_surface.blit(small_font.render(type_info, True, DARK_GRAY), (20, item_y + 35))
+        liabilities_surface.blit(small_plus_font.render(value, True, (200, 0, 0)),
+                                 (liabilities_surface.get_width() - 180, item_y + 20))
+
+        visible_liabilities.append((item, pygame.Rect(liabilities_area.x,
+                                                      liabilities_area.y + item_y - scroll_offset_liabilities,
+                                                      item_rect.width, item_rect.height)))
 
     screen.blit(liabilities_surface, liabilities_area.topleft, area=pygame.Rect(0, scroll_offset_liabilities, liabilities_area.width, liabilities_area.height))
 
@@ -416,16 +423,11 @@ def draw_assets_screen():
         pygame.draw.rect(screen, DARK_GRAY, (liabilities_area.right - 10, liabilities_area.y, 6, liabilities_area.height))
         pygame.draw.rect(screen, GRAY, (liabilities_area.right - 10, scroll_y, 6, scroll_height))
 
-    # Чистий капітал
     net_worth = player.get_net_worth()
     screen.blit(medium_plus_font.render(f"Чистий капітал: {net_worth:,} ₴".replace(",", " "), True, (0, 150, 0)), (offset_x + 270, 680))
 
-    # Попап деталі
     if selected_fin_item:
         draw_asset_popup(selected_fin_item, 260)
-
-
-
 
 def draw_company_manage_screen(company):
     screen.fill(LIGHT_GRAY)
@@ -440,7 +442,6 @@ def draw_company_manage_screen(company):
 
     pygame.draw.rect(screen, BLACK, main_rect, 3)
 
-    # Назва компанії
     title = medium_plus_font.render(company.name, True, BLACK)
     screen.blit(title, (170, 60))
 
@@ -476,7 +477,6 @@ def draw_company_manage_screen(company):
         screen.blit(small_plus_font.render(label, True, BLACK), (x + 10, y + 10))
         company.manage_btns.append((label, rect))
 
-    # --- Журнал компанії ---
     log_rect = pygame.Rect(650, 140, 560, 500)
     pygame.draw.rect(screen, WHITE, log_rect)
     pygame.draw.rect(screen, BLACK, log_rect, 1)
@@ -485,8 +485,6 @@ def draw_company_manage_screen(company):
     for i, line in enumerate(company.log[-12:][::-1]):
         log_line = small_font.render(f"— {line}", True, DARK_GRAY)
         screen.blit(log_line, (log_rect.x + 10, log_rect.y + 10 + i * 28))
-
-
 
 def draw_asset_popup(item, anchor_y=260):
     global popup_rect
@@ -498,6 +496,7 @@ def draw_asset_popup(item, anchor_y=260):
     screen.blit(medium_plus_font.render("Деталі об'єкта:", True, BLACK), (popup_rect.x + 20, popup_rect.y + 20))
 
     lines = []
+
     if isinstance(item, Company):
         lines = [
             f"Назва: {item.name}",
@@ -505,22 +504,54 @@ def draw_asset_popup(item, anchor_y=260):
             f"Вартість: {item.cost:,} ₴".replace(",", " "),
             f"Дохід/міс: {item.income:,} ₴".replace(",", " ")
         ]
+    elif isinstance(item, RealEstate):
+        lines = [
+            f"Назва: {item.name}",
+            f"Локація: {item.location}",
+            f"Вартість: {item.value:,} ₴".replace(",", " "),
+            f"Дохід/міс: {item.income:,} ₴".replace(",", " ")
+        ]
+
+        if isinstance(item, ResidentialProperty):
+            lines.append(f"Орендарі: {item.tenants}")
+        elif isinstance(item, CommercialProperty):
+            lines.append(f"Бізнес: {item.business_type or 'Невідомо'}")
+        elif isinstance(item, LandPlot):
+            lines.append(f"Площа: {item.area_sqm} м²")
     elif isinstance(item, dict):
         lines = [f"{k}: {v}" for k, v in item.items()]
 
+    elif isinstance(item, Loan):
+        lines = [
+            f"Кредитор: {item.lender}",
+            f"Тіло кредиту: {item.principal:,} ₴".replace(",", " "),
+            f"Відсотки: {item.interest_rate * 100:.1f}%",
+            f"Щомісячний платіж: {item.monthly_payment:,} ₴".replace(",", " "),
+            f"Залишок: {item.remaining_balance:,.0f} ₴".replace(",", " "),
+            f"Залишилось місяців: {item.months_remaining}"
+        ]
+
+        item.repay_btn = pygame.Rect(popup_rect.x + 20, popup_rect.y + 210, 180, 30)
+        pygame.draw.rect(screen, LIGHT_GRAY, item.repay_btn)
+        pygame.draw.rect(screen, BLACK, item.repay_btn, 1)
+        screen.blit(small_font.render("Погасити 10 000 ₴", True, BLACK), (item.repay_btn.x + 10, item.repay_btn.y + 5))
+
+        item.full_repay_btn = pygame.Rect(popup_rect.x + 220, popup_rect.y + 210, 200, 30)
+        pygame.draw.rect(screen, LIGHT_GRAY, item.full_repay_btn)
+        pygame.draw.rect(screen, BLACK, item.full_repay_btn, 1)
+        screen.blit(small_font.render("Погасити повністю", True, BLACK),
+                    (item.full_repay_btn.x + 10, item.full_repay_btn.y + 5))
+
     for i, line in enumerate(lines):
         txt = small_plus_font.render(line, True, DARK_GRAY)
-        screen.blit(txt, (popup_rect.x + 20, popup_rect.y + 60 + i * 30))
+        screen.blit(txt, (popup_rect.x + 20, popup_rect.y + 60 + i * 25))
 
-    # --- КНОПКИ для Company ---
-    if isinstance(item, Company):
-        # Кнопка "Менеджмент"
+    if isinstance(item, (Company, RealEstate)):
         item.manage_btn = pygame.Rect(popup_rect.x + 20, popup_rect.y + 180, 120, 30)
         pygame.draw.rect(screen, LIGHT_GRAY, item.manage_btn)
         pygame.draw.rect(screen, BLACK, item.manage_btn, 1)
         screen.blit(small_font.render("Менеджмент", True, BLACK), (item.manage_btn.x + 10, item.manage_btn.y + 5))
 
-        # Кнопка "Продати"
         item.sell_btn = pygame.Rect(popup_rect.x + 160, popup_rect.y + 180, 100, 30)
         pygame.draw.rect(screen, LIGHT_GRAY, item.sell_btn)
         pygame.draw.rect(screen, BLACK, item.sell_btn, 1)
@@ -560,19 +591,84 @@ def draw_company_market_screen():
     visible_part = market_surface.subsurface(pygame.Rect(0, scroll_offset_market, scroll_area.width, scroll_area.height))
     screen.blit(visible_part, scroll_area.topleft)
 
-    # Скролбар
     if market_surface.get_height() > scroll_area.height:
         scroll_height = max(40, scroll_area.height * scroll_area.height // market_surface.get_height())
         scroll_y = scroll_area.y + scroll_offset_market * scroll_area.height // market_surface.get_height()
         pygame.draw.rect(screen, DARK_GRAY, (scroll_area.right - 10, scroll_area.y, 6, scroll_area.height))
         pygame.draw.rect(screen, GRAY, (scroll_area.right - 10, scroll_y, 6, scroll_height))
 
-    # Права частина (можна під поради або додаткові кнопки)
     pygame.draw.rect(screen, LIGHT_GRAY, (1100, 50, 250, 620))
     pygame.draw.rect(screen, GRAY, (1100, 50, 250, 620), 1)
 
+def draw_real_estate_manage_screen(real_estate):
+    screen.fill(LIGHT_GRAY)
+    panel_rect = pygame.Rect(150, 50, 1100, 620)
 
+    if isinstance(real_estate, ResidentialProperty):
+        bg_img = images["residential_bg"]
+    elif isinstance(real_estate, CommercialProperty):
+        bg_img = images["commercial_bg"]
+    elif isinstance(real_estate, LandPlot):
+        bg_img = images["land_bg"]
+    else:
+        bg_img = None
 
+    if bg_img:
+        bg_image = pygame.transform.scale(bg_img, panel_rect.size)
+        screen.blit(bg_image, panel_rect.topleft)
+        overlay = pygame.Surface(panel_rect.size, pygame.SRCALPHA)
+        overlay.fill((255, 255, 255, 180))
+        screen.blit(overlay, panel_rect.topleft)
+
+    pygame.draw.rect(screen, BLACK, panel_rect, 3)
+
+    title = medium_plus_font.render(real_estate.name, True, BLACK)
+    screen.blit(title, (170, 60))
+
+    lines = [
+        f"Локація: {real_estate.location}",
+        f"Вартість: {real_estate.value:,} ₴".replace(",", " "),
+        f"Дохід/міс: {real_estate.income:,} ₴".replace(",", " "),
+    ]
+
+    if isinstance(real_estate, ResidentialProperty):
+        lines.append(f"Орендарі: {real_estate.tenants}")
+    elif isinstance(real_estate, CommercialProperty):
+        lines.append(f"Бізнес: {real_estate.business_type or 'Невідомо'}")
+    elif isinstance(real_estate, LandPlot):
+        lines.append(f"Площа: {real_estate.area_sqm} м²")
+
+    for i, line in enumerate(lines):
+        txt = small_plus_font.render(line, True, BLACK)
+        screen.blit(txt, (170, 120 + i * 30))
+
+    button_defs = [
+        ("Здати в оренду", (180, 420)),
+        ("Звільнити", (360, 420)),
+        ("Покращити", (180, 480)),
+        ("Кредит +25K", (360, 480)),
+        ("Погасити 25K", (180, 540)),
+    ]
+
+    real_estate.manage_btns = []
+    for label, (x, y) in button_defs:
+        rect = pygame.Rect(x, y, 160, 40)
+        pygame.draw.rect(screen, WHITE, rect)
+        pygame.draw.rect(screen, BLACK, rect, 2)
+        screen.blit(small_plus_font.render(label, True, BLACK), (x + 10, y + 10))
+        real_estate.manage_btns.append((label, rect))
+
+    if not hasattr(real_estate, "log"):
+        real_estate.log = []
+
+    log_rect = pygame.Rect(650, 140, 440, 460)
+    pygame.draw.rect(screen, WHITE, log_rect)
+    pygame.draw.rect(screen, BLACK, log_rect, 1)
+    screen.blit(font.render("Журнал об'єкта", True, BLACK), (650, 100))
+
+    for i, line in enumerate(real_estate.log[-12:][::-1]):
+        log_line = small_font.render(f"— {line}", True, DARK_GRAY)
+        screen.blit(log_line, (log_rect.x + 10, log_rect.y + 10 + i * 28))
 
 def draw_event_popup(event):
     popup_rect = pygame.Rect(200, 150, 1000, 500)
@@ -605,7 +701,6 @@ def draw_event_popup(event):
             label = small_plus_font.render(option, True, BLACK)
             screen.blit(label, (btn_rect.x + 20, btn_rect.y + 10))
             event["buttons"].append((option, btn_rect))
-
 
 def draw_profile_screen():
     screen.fill(LIGHT_GRAY)
@@ -646,7 +741,6 @@ def draw_text_block(text, x, y):
     lines = text.split("\n")
     for i, line in enumerate(lines):
         screen.blit(small_plus_font.render(line, True, BLACK), (x, y + i * 22))
-
 
 def draw_partner_screen(partner):
     screen.fill(LIGHT_GRAY)
@@ -689,16 +783,13 @@ def draw_real_estate_screen():
     title = font.render("Газета нерухомості", True, BLACK)
     screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 30))
 
-    # Вертикальна лінія
     pygame.draw.line(screen, GRAY, (WIDTH // 2, 100), (WIDTH // 2, HEIGHT - 50), 2)
 
-    # Новини (ліва частина)
     screen.blit(medium_plus_font.render("Новини", True, BLACK), (100, 100))
     for i, news in enumerate(real_estate_news):
         txt = small_plus_font.render(f"• {news}", True, DARK_GRAY)
         screen.blit(txt, (100, 150 + i * 40))
 
-    # Об'єкти (права частина)
     screen.blit(medium_plus_font.render("Об'єкти для продажу", True, BLACK), (WIDTH // 2 + 40, 100))
     real_estate_buttons.clear()
     for i, obj in enumerate(weekly_real_estate):
@@ -718,7 +809,6 @@ def draw_real_estate_screen():
         pygame.draw.rect(screen, BLACK, buy_rect, 1)
         screen.blit(small_font.render("Купити", True, BLACK), (buy_rect.x + 10, buy_rect.y + 5))
         real_estate_buttons.append((obj, buy_rect))
-
 
 def draw_player_screen(player):
     screen.fill(LIGHT_GRAY)
@@ -784,7 +874,7 @@ while True:
                     max_scroll = max(0, len(available_companies) * 120 - scroll_area.height)
                     scroll_offset_market = max(0, min(scroll_offset_market - event.y * 30, max_scroll))
 
-        elif event.type == pygame.MOUSEBUTTONDOWN:
+        elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_pos = pygame.mouse.get_pos()
             if active_event:
                 for label, rect in active_event["buttons"]:
@@ -803,13 +893,58 @@ while True:
                                 selected_company.fire_employees(1)
                             elif label == "Ефективність":
                                 selected_company.change_efficiency(0.1)
-                            elif label == "⬇Ефективність":
+                            elif label == "Ефективність":
                                 selected_company.change_efficiency(-0.1)
                             elif label == "Кредит +50K":
                                 selected_company.take_loan(50_000)
                             elif label == "Погасити 50K":
                                 selected_company.repay_loan(50_000)
-
+            elif current_screen == "real_estate_manage" and selected_real_estate:
+                if hasattr(selected_real_estate, "manage_btns"):
+                    for label, rect in selected_real_estate.manage_btns:
+                        if rect.collidepoint(event.pos):
+                            if label == "Здати в оренду":
+                                selected_real_estate.income += 5000
+                                selected_real_estate.log.append("Здано в оренду (+5000 ₴)")
+                            elif label == "Звільнити":
+                                selected_real_estate.income = 0
+                                selected_real_estate.log.append("Орендарі виселені")
+                            elif label == "Покращити":
+                                selected_real_estate.value += 50_000
+                                selected_real_estate.income += 1000
+                                selected_real_estate.log.append("Об'єкт покращено")
+                            elif label == "Кредит +25K":
+                                if not hasattr(selected_real_estate, "debt"):
+                                    selected_real_estate.debt = 0
+                                selected_real_estate.debt += 25_000
+                                selected_real_estate.log.append("Отримано кредит: 25 000 ₴")
+                            elif label == "Погасити 25K":
+                                if hasattr(selected_real_estate, "debt") and selected_real_estate.debt > 0:
+                                    payment = min(25_000, selected_real_estate.debt)
+                                    selected_real_estate.debt -= payment
+                                    selected_real_estate.log.append(f"Погашено кредит: {payment} ₴")
+            elif isinstance(selected_fin_item, Loan):
+                if hasattr(selected_fin_item, "repay_btn") and selected_fin_item.repay_btn.collidepoint(event.pos):
+                    repayment = 10_000
+                    if player.balance >= repayment:
+                        selected_fin_item.remaining_balance -= repayment
+                        player.balance -= repayment
+                        player.log.insert(0,
+                                          f"{game_time.strftime('%d.%m.%Y')} — Частково погашено кредит: {repayment:,} ₴".replace(
+                                              ",", " "))
+                        if selected_fin_item.remaining_balance <= 0:
+                            player.loans.remove(selected_fin_item)
+                            selected_fin_item = None
+                elif hasattr(selected_fin_item, "full_repay_btn") and selected_fin_item.full_repay_btn.collidepoint(
+                        event.pos):
+                    repayment = selected_fin_item.remaining_balance
+                    if player.balance >= repayment:
+                        player.balance -= repayment
+                        player.log.insert(0,
+                                          f"{game_time.strftime('%d.%m.%Y')} — Повністю погашено кредит: {repayment:,} ₴".replace(
+                                              ",", " "))
+                        player.loans.remove(selected_fin_item)
+                        selected_fin_item = None
             elif current_screen == "assets_w":
                 if selected_fin_item and popup_rect and popup_rect.collidepoint(event.pos):
                     if isinstance(selected_fin_item, Company):
@@ -823,6 +958,19 @@ while True:
                             player.balance += selected_fin_item.cost
                             player.monthly_income -= selected_fin_item.income
                             selected_fin_item = None
+                    elif isinstance(selected_fin_item, RealEstate):
+                        if hasattr(selected_fin_item, "manage_btn") and selected_fin_item.manage_btn.collidepoint(
+                                event.pos):
+                            selected_real_estate = selected_fin_item
+                            current_screen = "real_estate_manage"
+                        elif hasattr(selected_fin_item, "sell_btn") and selected_fin_item.sell_btn.collidepoint(
+                                event.pos):
+                            player.assets.remove(selected_fin_item)
+                            player.balance += selected_fin_item.value
+                            player.log.insert(0,
+                                              f"{game_time.strftime('%d.%m.%Y')} — Продано нерухомість: {selected_fin_item.name}")
+                            selected_fin_item = None
+                            selected_real_estate = None
                 else:
                     if selected_fin_item and popup_rect and not popup_rect.collidepoint(event.pos):
                         selected_fin_item = None
@@ -957,6 +1105,8 @@ while True:
         draw_player_screen(player)
     elif current_screen == "company_manage" and selected_company:
         draw_company_manage_screen(selected_company)
+    elif current_screen == "real_estate_manage" and selected_real_estate:
+        draw_real_estate_manage_screen(selected_real_estate)
     elif current_screen == "real_estate_market":
         draw_real_estate_screen()
     if active_event:
