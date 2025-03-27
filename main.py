@@ -5,6 +5,10 @@ from classes.character import Character
 from classes.player import Player
 from classes.company import Company
 from classes.company_button import CompanyButton
+from resources import load_images
+from mechanics.company_generation import generate_company_list
+
+available_companies = generate_company_list(10)
 
 pygame.init()
 
@@ -12,6 +16,7 @@ import datetime
 popup_rect = None
 scroll_offset_assets = 0
 scroll_offset_liabilities = 0
+scroll_offset_market = 0
 selected_fin_item = None
 selected_company = None
 visible_assets = []
@@ -59,6 +64,8 @@ player = Player("Іван", 32, 8, 5)
 balance_history = []
 MAX_HISTORY_POINTS = 30
 
+images = load_images()
+images["company_bg"] = images["company_bg"].convert_alpha()
 
 buttons = [
     {"label": "Дія", "rect": pygame.Rect(100, 450, 120, 40)},
@@ -71,13 +78,6 @@ events = [
     {"date": datetime.datetime(2007, 3, 26, 10), "title": "Виступ у парламенті", "desc": "Запропонована нова економічна реформа."},
     {"date": datetime.datetime(2007, 3, 28, 9),  "title": "Рада безпеки", "desc": "Термінове обговорення ситуації в регіоні."},
 ]
-
-available_companies = [
-    Company("ТОВ 'ХерсонБуд'", "Будівництво", 800_000, 50_000),
-    Company("ТОВ 'АгроХолдинг'", "Сільське господарство", 650_000, 42_000),
-    Company("ТОВ 'Digital Media'", "Медіа", 950_000, 60_000),
-]
-
 
 active_event = None  # Поточна активна подія
 
@@ -358,9 +358,7 @@ def draw_assets_screen():
 
     global liabilities
     liabilities = [
-        {"name": "Кредит в банку", "type": "Заборгованість", "value": f"-{player.credit:,} ₴".replace(",", " ")},
-        {"name": "Щомісячні витрати", "type": "Поточні", "value": f"-{player.monthly_expenses:,} ₴/міс".replace(",", " ")},
-    ] * 4  # тимчасовий список для скролу
+    ]
 
     liabilities_surface = pygame.Surface((liabilities_area.width, len(liabilities) * 70), pygame.SRCALPHA)
     visible_liabilities.clear()
@@ -399,8 +397,15 @@ def draw_assets_screen():
 def draw_company_manage_screen(company):
     screen.fill(LIGHT_GRAY)
 
-    pygame.draw.rect(screen, WHITE, (150, 50, 1100, 620))
-    pygame.draw.rect(screen, BLACK, (150, 50, 1100, 620), 3)
+    main_rect = pygame.Rect(150, 50, 1100, 620)
+
+    bg_image = pygame.transform.scale(images["company_bg"], main_rect.size)
+    overlay = pygame.Surface(main_rect.size, pygame.SRCALPHA)
+    overlay.fill((255, 255, 255, 180))
+    bg_image.blit(overlay, (0, 0))
+    screen.blit(bg_image, main_rect.topleft)
+
+    pygame.draw.rect(screen, BLACK, main_rect, 3)
 
     # Назва компанії
     title = medium_plus_font.render(company.name, True, BLACK)
@@ -437,22 +442,16 @@ def draw_company_manage_screen(company):
         pygame.draw.rect(screen, BLACK, rect, 2)
         screen.blit(small_plus_font.render(label, True, BLACK), (x + 10, y + 10))
 
-    # --- Лог компанії ---
-    pygame.draw.rect(screen, WHITE, (650, 140, 560, 500))
-    pygame.draw.rect(screen, BLACK, (650, 140, 560, 500), 1)
+    # --- Журнал компанії ---
+    log_rect = pygame.Rect(650, 140, 560, 500)
+    pygame.draw.rect(screen, WHITE, log_rect)
+    pygame.draw.rect(screen, BLACK, log_rect, 1)
     screen.blit(font.render("Журнал компанії", True, BLACK), (650, 100))
 
     for i, line in enumerate(company.log[-12:][::-1]):
         log_line = small_font.render(f"— {line}", True, DARK_GRAY)
-        screen.blit(log_line, (660, 150 + i * 28))
+        screen.blit(log_line, (log_rect.x + 10, log_rect.y + 10 + i * 28))
 
-    company.manage_btns = []
-    for label, (x, y) in button_defs:
-        rect = pygame.Rect(x, y, 180, 40)
-        pygame.draw.rect(screen, WHITE, rect)
-        pygame.draw.rect(screen, BLACK, rect, 2)
-        screen.blit(small_plus_font.render(label, True, BLACK), (x + 10, y + 10))
-        company.manage_btns.append((label, rect))
 
 
 def draw_asset_popup(item, anchor_y=260):
@@ -494,35 +493,50 @@ def draw_asset_popup(item, anchor_y=260):
         screen.blit(small_font.render("Продати", True, BLACK), (item.sell_btn.x + 20, item.sell_btn.y + 5))
 
 def draw_company_market_screen():
+    global company_buttons
     screen.fill(LIGHT_GRAY)
     draw_game_clock(300)
     y_offset = 150
 
-    pygame.draw.rect(screen, WHITE, (50, y_offset, 1000, 520))
-    pygame.draw.rect(screen, BLACK, (50, y_offset, 1000, 520), 3)
+    panel_rect = pygame.Rect(50, y_offset, 1000, 520)
+    pygame.draw.rect(screen, WHITE, panel_rect)
+    pygame.draw.rect(screen, BLACK, panel_rect, 3)
 
     title = medium_plus_font.render("Створити або купити компанію", True, BLACK)
     screen.blit(title, (70, y_offset + 20))
 
-    # Оновити список кнопок
+    scroll_area = pygame.Rect(70, y_offset + 70, 960, 430)
+    market_surface = pygame.Surface((scroll_area.width, len(available_companies) * 120), pygame.SRCALPHA)
+
     company_buttons.clear()
 
     for i, company in enumerate(available_companies):
-        y = y_offset + 70 + i * 120
+        y = i * 120
+        pygame.draw.rect(market_surface, WHITE, (0, y, 960, 100))
+        pygame.draw.rect(market_surface, GRAY, (0, y, 960, 100), 1)
+        market_surface.blit(small_plus_font.render(company.name, True, BLACK), (20, y + 10))
+        market_surface.blit(small_font.render(f"Сектор: {company.sector}", True, DARK_GRAY), (20, y + 40))
+        market_surface.blit(small_font.render(f"Вартість: {company.cost:,} ₴".replace(",", " "), True, DARK_GRAY), (20, y + 65))
+        market_surface.blit(small_font.render(f"Дохід: {company.income:,} ₴/міс".replace(",", " "), True, DARK_GRAY), (300, y + 65))
 
-        pygame.draw.rect(screen, WHITE, (70, y, 960, 100))
-        pygame.draw.rect(screen, GRAY, (70, y, 960, 100), 1)
-        screen.blit(small_plus_font.render(company.name, True, BLACK), (90, y + 10))
-        screen.blit(small_font.render(f"Сектор: {company.sector}", True, DARK_GRAY), (90, y + 40))
-        screen.blit(small_font.render(f"Вартість: {company.cost:,} ₴".replace(",", " "), True, DARK_GRAY), (90, y + 65))
-        screen.blit(small_font.render(f"Дохід: {company.income:,} ₴/міс".replace(",", " "), True, DARK_GRAY), (300, y + 65))
-
-        button = CompanyButton(company, 850, y + 30, small_plus_font)
+        button = CompanyButton(company, 830, y + 30, small_plus_font)
         company_buttons.append(button)
-        button.draw(screen)
+        button.draw(market_surface)
 
+    visible_part = market_surface.subsurface(pygame.Rect(0, scroll_offset_market, scroll_area.width, scroll_area.height))
+    screen.blit(visible_part, scroll_area.topleft)
+
+    # Скролбар
+    if market_surface.get_height() > scroll_area.height:
+        scroll_height = max(40, scroll_area.height * scroll_area.height // market_surface.get_height())
+        scroll_y = scroll_area.y + scroll_offset_market * scroll_area.height // market_surface.get_height()
+        pygame.draw.rect(screen, DARK_GRAY, (scroll_area.right - 10, scroll_area.y, 6, scroll_area.height))
+        pygame.draw.rect(screen, GRAY, (scroll_area.right - 10, scroll_y, 6, scroll_height))
+
+    # Права частина (можна під поради або додаткові кнопки)
     pygame.draw.rect(screen, LIGHT_GRAY, (1100, 50, 250, 620))
     pygame.draw.rect(screen, GRAY, (1100, 50, 250, 620), 1)
+
 
 
 
@@ -682,6 +696,7 @@ while True:
             sys.exit()
 
         elif event.type == pygame.MOUSEWHEEL:
+            mouse_pos = pygame.mouse.get_pos()
             if current_screen == "assets_w":
                 mouse_pos = pygame.mouse.get_pos()
                 if assets_area.collidepoint(mouse_pos):
@@ -690,12 +705,18 @@ while True:
                 elif liabilities_area.collidepoint(mouse_pos):
                     scroll_offset_liabilities = max(0, min(scroll_offset_liabilities - event.y * 30,
                                                            max(0, len(liabilities) * 70 - liabilities_area.height)))
+            elif current_screen == "company_creation":
+                scroll_area = pygame.Rect(70, 220, 960, 430)
+                if scroll_area.collidepoint(mouse_pos):
+                    max_scroll = max(0, len(available_companies) * 120 - scroll_area.height)
+                    scroll_offset_market = max(0, min(scroll_offset_market - event.y * 30, max_scroll))
 
         elif event.type == pygame.MOUSEBUTTONDOWN:
+            mouse_pos = pygame.mouse.get_pos()
             if active_event:
                 for label, rect in active_event["buttons"]:
                     if rect.collidepoint(event.pos):
-                        active_event = None  # Закриваємо івент
+                        active_event = None
                         break
                 continue
 
@@ -748,11 +769,7 @@ while True:
                     if btn.is_clicked(event.pos):
                         if player.balance >= btn.company.cost:
                             player.balance -= btn.company.cost
-                            player.assets.append({
-                                "name": btn.company.name,
-                                "type": btn.company.sector,
-                                "value": btn.company.cost
-                            })
+                            player.assets.append(btn.company)
                             player.monthly_income += btn.company.income
                             available_companies.remove(btn.company)
                             company_buttons.clear()
@@ -772,7 +789,7 @@ while True:
                 for item, rect in visible_assets:
                     if rect.collidepoint(event.pos):
                         if "name" in item and item["name"] in [c.name for c in available_companies]:
-                            continue  # Якщо це ще не куплена компанія
+                            continue
                         for c in player.assets:
                             if isinstance(c, Company) and c.name == item["name"]:
                                 selected_company = c
@@ -822,9 +839,10 @@ while True:
                     if idx < len(available_speeds) - 1:
                         time_speed = available_speeds[idx + 1]
             elif event.key == pygame.K_LEFT:
-                    idx = available_speeds.index(time_speed)
-                    if idx > 0:
-                        time_speed = available_speeds[idx - 1]
+                idx = available_speeds.index(time_speed)
+                if idx > 0:
+                    time_speed = available_speeds[idx - 1]
+
             elif event.type == pygame.MOUSEMOTION:
                 for btn in company_buttons:
                     btn.check_hover(event.pos)
