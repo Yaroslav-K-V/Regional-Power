@@ -7,6 +7,7 @@ from classes.company import Company
 from classes.company_button import CompanyButton
 from resources import load_images
 from mechanics.company_generation import generate_company_list
+from classes.real_estate import *
 
 available_companies = generate_company_list(10)
 
@@ -94,10 +95,18 @@ if not active_event:
         }
     }
 
+REAL_ESTATE_TYPE_NAMES = {
+    "ResidentialProperty": "Житлова",
+    "CommercialProperty": "Комерційна",
+    "LandPlot": "Земельна ділянка"
+}
+
+
 current_screen = "main"
 clicked = False
 
 company_buttons = []
+real_estate_buttons = []
 
 assets_area = pygame.Rect(0, 0, 0, 0)
 liabilities_area = pygame.Rect(0, 0, 0, 0)
@@ -107,6 +116,19 @@ main_screen_data = {}
 
 main_surface = pygame.Surface((WIDTH, HEIGHT))
 main_needs_redraw = True
+
+weekly_real_estate = [
+    ResidentialProperty("1-к квартира", "Київ", 450_000, income=5000, tenants=1),
+    CommercialProperty("Магазин біля вокзалу", "Харків", 900_000, income=12000, business_type="Retail"),
+    LandPlot("Ділянка на дачах", "Львів", 320_000, area_sqm=600)
+]
+
+
+real_estate_news = [
+    "Ціни на квартири зросли на 5%",
+    "Комерційна нерухомість дорожчає",
+    "Земельні ділянки активно скуповують фермери"
+]
 
 
 def generate_main_screen_data():
@@ -130,6 +152,11 @@ def generate_main_screen_data():
         "Загальна вартість: 3.5 млн ₴",
         "Дохід/міс: 120 000 ₴"
     ]
+    sample_properties = [
+        "1-к квартира, 450 тис грн",
+        "Комерц. приміщення, 900 тис грн",
+        "Ділянка, 320 тис грн"
+    ]
 
     main_screen_data.update({
         "map": ["Карта світу", "Локація: Київ"],
@@ -140,7 +167,8 @@ def generate_main_screen_data():
         "profile": [f"{player.name}, Вік: {player.age}",
                     f"Інтелект: {player.intelligence} | Харизма: {player.charisma}"],
         "log": ["Останні дії:", "— 23.03: Зустріч"],
-        "ukraine_map": ["Мапа України", "Область: Херсон"]
+        "ukraine_map": ["Мапа України", "Область: Херсон"],
+        "magazine": ["Нерухомість:", *random.sample(sample_properties, 2)]
     })
 
 generate_main_screen_data()
@@ -158,7 +186,8 @@ def draw_main_screen():
         "profile": pygame.Rect(950, 20, 250, 250),
         "partners": pygame.Rect(950, 300, 420, 280),
         "log": pygame.Rect(680, 480, 690, 100),
-        "ukraine_map": pygame.Rect(20, 340, 250, 240)
+        "ukraine_map": pygame.Rect(20, 340, 250, 240),
+        "magazine": pygame.Rect(290, 480, 380, 240)
     }
 
     for name, rect in blocks.items():
@@ -325,11 +354,15 @@ def draw_assets_screen():
         pygame.draw.rect(asset_surface, (240, 240, 255), item_rect)
         pygame.draw.rect(asset_surface, GRAY, item_rect, 1)
 
-        # Отримуємо дані
         if isinstance(item, Company):
             name_text = item.name
             type_text = item.sector
             value_text = f"{item.cost:,} ₴".replace(",", " ")
+        elif isinstance(item, RealEstate):
+            name_text = item.name
+            type_key = type(item).__name__
+            type_text = REAL_ESTATE_TYPE_NAMES.get(type_key, "Нерухомість")
+            value_text = f"{item.value:,} ₴".replace(",", " ")
         else:
             name_text = item["name"]
             type_text = item["type"]
@@ -426,21 +459,22 @@ def draw_company_manage_screen(company):
         txt = small_plus_font.render(line, True, BLACK)
         screen.blit(txt, (170, 120 + i * 30))
 
-    # --- Кнопки ---
     button_defs = [
-        ("+ Найняти", (180, 420)),
-        ("- Звільнити", (320, 420)),
-        ("⬆️ Ефективність", (180, 470)),
-        ("⬇️ Ефективність", (380, 470)),
-        ("💸 Кредит +50K", (180, 520)),
-        ("🏦 Погасити 50K", (380, 520)),
+        ("Найняти", (180, 420)),
+        ("Звільнити", (320, 420)),
+        ("Ефективність", (180, 470)),
+        ("⬇Ефективність", (380, 470)),
+        ("Кредит +50K", (180, 520)),
+        ("Погасити 50K", (380, 520)),
     ]
 
+    company.manage_btns = []
     for label, (x, y) in button_defs:
         rect = pygame.Rect(x, y, 180, 40)
         pygame.draw.rect(screen, WHITE, rect)
         pygame.draw.rect(screen, BLACK, rect, 2)
         screen.blit(small_plus_font.render(label, True, BLACK), (x + 10, y + 10))
+        company.manage_btns.append((label, rect))
 
     # --- Журнал компанії ---
     log_rect = pygame.Rect(650, 140, 560, 500)
@@ -650,6 +684,42 @@ def draw_partner_screen(partner):
     screen.blit(font.render("Розвідка", True, BLACK), (550 + offset, 460))
     screen.blit(font.render("Дії", True, BLACK), (750 + offset, 460))
 
+def draw_real_estate_screen():
+    screen.fill(LIGHT_GRAY)
+    title = font.render("Газета нерухомості", True, BLACK)
+    screen.blit(title, (WIDTH // 2 - title.get_width() // 2, 30))
+
+    # Вертикальна лінія
+    pygame.draw.line(screen, GRAY, (WIDTH // 2, 100), (WIDTH // 2, HEIGHT - 50), 2)
+
+    # Новини (ліва частина)
+    screen.blit(medium_plus_font.render("Новини", True, BLACK), (100, 100))
+    for i, news in enumerate(real_estate_news):
+        txt = small_plus_font.render(f"• {news}", True, DARK_GRAY)
+        screen.blit(txt, (100, 150 + i * 40))
+
+    # Об'єкти (права частина)
+    screen.blit(medium_plus_font.render("Об'єкти для продажу", True, BLACK), (WIDTH // 2 + 40, 100))
+    real_estate_buttons.clear()
+    for i, obj in enumerate(weekly_real_estate):
+        y = 150 + i * 120
+        pygame.draw.rect(screen, WHITE, (WIDTH // 2 + 30, y, 600, 100))
+        pygame.draw.rect(screen, GRAY, (WIDTH // 2 + 30, y, 600, 100), 1)
+        obj_type = type(obj).__name__.replace("Property", "").replace("Plot", "Ділянка")
+        type_text = REAL_ESTATE_TYPE_NAMES.get(type(obj).__name__, "Нерухомість")
+        screen.blit(small_plus_font.render(f"{obj.name} ({type_text})", True, BLACK), (WIDTH // 2 + 40, y + 10))
+        screen.blit(small_font.render(f"Локація: {obj.location}", True, DARK_GRAY), (WIDTH // 2 + 40, y + 40))
+        screen.blit(
+            small_font.render(f"Ціна: {obj.value:,} ₴".replace(",", " "), True, DARK_GRAY),
+            (WIDTH // 2 + 40, y + 65)
+        )
+        buy_rect = pygame.Rect(WIDTH // 2 + 500, y + 30, 80, 30)
+        pygame.draw.rect(screen, GREEN, buy_rect)
+        pygame.draw.rect(screen, BLACK, buy_rect, 1)
+        screen.blit(small_font.render("Купити", True, BLACK), (buy_rect.x + 10, buy_rect.y + 5))
+        real_estate_buttons.append((obj, buy_rect))
+
+
 def draw_player_screen(player):
     screen.fill(LIGHT_GRAY)
     offset = 90
@@ -684,6 +754,9 @@ def draw_player_screen(player):
     for i, entry in enumerate(player.log[:5]):
         log_text = font.render(entry, True, BLACK)
         screen.blit(log_text, (850 + offset, 470 + i * 30))
+
+def is_clicked(rect, pos):
+    return rect.collidepoint(pos)
 
 while True:
 
@@ -721,25 +794,20 @@ while True:
                 continue
 
             elif current_screen == "company_manage" and selected_company:
-                mouse_x, mouse_y = event.pos
-
-                def is_clicked(rect):
-                    return rect.collidepoint(mouse_x, mouse_y)
-
                 if hasattr(selected_company, "manage_btns"):
                     for label, rect in selected_company.manage_btns:
-                        if is_clicked(rect):
-                            if label == "+ Найняти":
+                        if rect.collidepoint(event.pos):
+                            if label == "Найняти":
                                 selected_company.hire_employees(1)
-                            elif label == "- Звільнити":
+                            elif label == "Звільнити":
                                 selected_company.fire_employees(1)
-                            elif label == "⬆️ Ефективність":
+                            elif label == "Ефективність":
                                 selected_company.change_efficiency(0.1)
-                            elif label == "⬇️ Ефективність":
+                            elif label == "⬇Ефективність":
                                 selected_company.change_efficiency(-0.1)
-                            elif label == "💸 Кредит +50K":
+                            elif label == "Кредит +50K":
                                 selected_company.take_loan(50_000)
-                            elif label == "🏦 Погасити 50K":
+                            elif label == "Погасити 50K":
                                 selected_company.repay_loan(50_000)
 
             elif current_screen == "assets_w":
@@ -785,6 +853,20 @@ while True:
                     if rect.collidepoint(event.pos):
                         selected_fin_item = item
                         break
+            elif current_screen == "real_estate_market":
+                for obj, rect in real_estate_buttons:
+                    if rect.collidepoint(event.pos):
+                        if player.balance >= obj.value:
+                            player.balance -= obj.value
+                            player.assets.append(obj)
+                            timestamp = game_time.strftime("%d.%m.%Y %H:%M")
+                            player.log.insert(0, f"{timestamp} — Куплено об'єкт: {obj.name}")
+                            weekly_real_estate.remove(obj)
+                            main_needs_redraw = True
+                            break
+                        else:
+                            print("Недостатньо коштів для покупки.")
+
             elif current_screen == "assets_w":
                 for item, rect in visible_assets:
                     if rect.collidepoint(event.pos):
@@ -809,6 +891,10 @@ while True:
                 profile_rect = pygame.Rect(950, 20, 180, 250)
                 if profile_rect.collidepoint(event.pos):
                     current_screen = "player_profile"
+                real_estate_rect = pygame.Rect(290, 480, 380, 240)
+                if real_estate_rect.collidepoint(event.pos):
+                    current_screen = "real_estate_market"
+
 
 
         elif event.type == pygame.KEYDOWN:
@@ -820,6 +906,8 @@ while True:
                 elif current_screen == "event_calendar":
                     current_screen = "company_creation"
                 elif current_screen == "company_creation":
+                    current_screen = "real_estate_market"
+                elif current_screen == "real_estate_market":
                     current_screen = "main"
             elif event.key == pygame.K_ESCAPE:
                 if current_screen == "company_manage":
@@ -869,6 +957,8 @@ while True:
         draw_player_screen(player)
     elif current_screen == "company_manage" and selected_company:
         draw_company_manage_screen(selected_company)
+    elif current_screen == "real_estate_market":
+        draw_real_estate_screen()
     if active_event:
         draw_event_popup(active_event)
 
