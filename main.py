@@ -1,6 +1,6 @@
 import pygame
 import sys
-
+import random
 from classes.character import Character
 from classes.player import Player
 from classes.company import Company
@@ -10,7 +10,8 @@ from mechanics.company_generation import generate_company_list
 from classes.real_estate import *
 from classes.loan import *
 
-available_companies = generate_company_list(10)
+
+available_companies = []
 
 pygame.init()
 
@@ -26,7 +27,7 @@ visible_liabilities = []
 assets_rect = pygame.Rect(290, 180, 380, 130)
 
 
-game_time = datetime.datetime(2007, 3, 24, 0, 0)
+game_time = datetime.datetime(2007, 3, 30, 0, 0)
 time_speed = 1.0
 paused = False
 hour_interval = 1_250
@@ -56,7 +57,7 @@ partners = []
 for i in range(6):
     x = 960 + (i % 3) * 130
     y = 340 + (i // 3) * 110
-    name = f"А.В. Красницький #{i + 1}"
+    name = f"N . P . C #{i + 1}"
     partner = Character(name, "Бізнес-партнер", (x, y))
     partners.append(partner)
 
@@ -138,15 +139,101 @@ real_estate_news = [
     "Земельні ділянки активно скуповують фермери"
 ]
 
+news_pool = [
+    "Уряд змінив курс валюти",
+    "Почався весняний призов",
+    "Нові податкові пільги для малого бізнесу",
+    "У Києві зростає попит на житло",
+    "Інфляція за місяць склала 2.3%",
+    "Збільшено фінансування оборони",
+    "Ціни на зерно зросли",
+    "Нацбанк підвищив облікову ставку",
+    "Будівельна активність зросла",
+    "Бізнес очікує зростання ВВП"
+]
+
+res_news = [
+    "Квартири в Києві дорожчають",
+    "Попит на житло зростає",
+    "Ціни на житло у столичних районах б’ють рекорди",
+    "Зростає інтерес до оренди квартир",
+    "Ринок вторинного житла оживає",
+    "Покупці масово інвестують у житло",
+    "Аналітики прогнозують зростання цін на житлову нерухомість",
+    "Столичні квартири стали дорожчими на 7%",
+    "Зниження іпотечних ставок стимулює попит на житло"
+]
+
+com_news = [
+    "Ріст цін на комерційну нерухомість",
+    "Бізнес орендує більше площ",
+    "Офісна нерухомість стає дефіцитом",
+    "Попит на торгові площі зростає",
+    "Ринок комерційної нерухомості на підйомі",
+    "Нові бізнес-центри заповнені на 90%",
+    "Компанії повертаються до офісного формату",
+    "Ціни на магазини в центрі міста зросли на 10%",
+    "Інвестори скуповують комерційні об’єкти"
+]
+
+land_news = [
+    "Фермери скуповують ділянки",
+    "Земля у Львові в дефіциті",
+    "Попит на сільськогосподарські ділянки різко зріс",
+    "Ціни на землю під будівництво ростуть",
+    "Дачні масиви розпродуються миттєво",
+    "Інвестори цікавляться прибережними ділянками",
+    "Уряд анонсував нові дотації для фермерів",
+    "Міська земля стає дорожчою",
+    "Земельні аукціони збирають рекордну кількість учасників"
+]
+
+
+def generate_random_news():
+    return "Останні новини:", random.choice(news_pool)
+
+def generate_magazine_news():
+    return ["Нерухомість:"] + [f"{p.name}, {p.value:,} грн" for p in random.sample(weekly_real_estate, min(2, len(weekly_real_estate)))]
+
+def rounded(value, base=10_000):
+    return int(round(value / base) * base)
+
+def refresh_weekly_real_estate():
+    global weekly_real_estate, real_estate_news
+
+    weekly_real_estate = [
+        ResidentialProperty("1-к квартира", "Київ", rounded(random.randint(400_000, 550_000)), income=5000, tenants=1),
+        CommercialProperty("Магазин біля вокзалу", "Харків", rounded(random.randint(850_000, 950_000)), income=12000, business_type="Retail"),
+        LandPlot("Ділянка на дачах", "Львів", rounded(random.randint(300_000, 350_000)), area_sqm=600)
+    ]
+
+    real_estate_news = []
+
+    for obj in weekly_real_estate:
+        if isinstance(obj, ResidentialProperty):
+            real_estate_news.append(random.choice(res_news))
+        elif isinstance(obj, CommercialProperty):
+            real_estate_news.append(random.choice(com_news))
+        elif isinstance(obj, LandPlot):
+            real_estate_news.append(random.choice(land_news))
+
+    today = game_time.strftime("%d.%m.%Y")
+    real_estate_news.append(f"{today} — {random.choice(res_news)}")
 
 def generate_main_screen_data():
     import random
-    sample_news = [
+    global main_screen_data
+    news_pool = [
         "Уряд змінив курс валюти",
-        "Енергоринок перегрітий",
-        "Нові правила оподаткування",
-        "Інвестори масово купують акції",
-        "НБУ знизив облікову ставку"
+        "Почався весняний призов",
+        "Нові податкові пільги для малого бізнесу",
+        "У Києві зростає попит на житло",
+        "Інфляція за місяць склала 2.3%",
+        "Збільшено фінансування оборони",
+        "Ціни на зерно зросли",
+        "Національний банк підвищив облікову ставку",
+        "Будівельна активність на заході зросла",
+        "Бізнес впевнено дивиться в майбутнє",
     ]
     sample_events = [
         "Зустріч з депутатом",
@@ -156,27 +243,24 @@ def generate_main_screen_data():
         "Голосування у ВР"
     ]
     sample_assets = [
-        "Активи: 4 компанії",
-        "Загальна вартість: 3.5 млн ₴",
-        "Дохід/міс: 120 000 ₴"
+        "Активи:",
+        "Загальна вартість:",
+        "Дохід/міс:"
     ]
     sample_properties = [
-        "1-к квартира, 450 тис грн",
-        "Комерц. приміщення, 900 тис грн",
-        "Ділянка, 320 тис грн"
     ]
 
     main_screen_data.update({
         "map": ["Карта світу", "Локація: Київ"],
         "graph": [],
-        "news": ["Останні новини:", random.choice(sample_news)],
+        "news": list(generate_random_news()),
         "assets": ["Стан активів:", random.choice(sample_assets)],
         "event_calendar": ["Найближча подія:", random.choice(sample_events)],
         "profile": [f"{player.name}, Вік: {player.age}",
                     f"Інтелект: {player.intelligence} | Харизма: {player.charisma}"],
-        "log": ["Останні дії:", "— 23.03: Зустріч"],
+        "log": ["Останні дії:"] + player.log[:5],
         "ukraine_map": ["Мапа України", "Область: Херсон"],
-        "magazine": ["Нерухомість:", *random.sample(sample_properties, 2)]
+        "magazine": generate_magazine_news(),
     })
 
 generate_main_screen_data()
@@ -192,7 +276,7 @@ def draw_main_screen():
         "event_calendar": pygame.Rect(680, 180, 250, 280),
         "profile": pygame.Rect(950, 20, 250, 250),
         "partners": pygame.Rect(950, 300, 420, 280),
-        "log": pygame.Rect(680, 480, 690, 100),
+        "log": pygame.Rect(680, 480, 690, 300),
         "ukraine_map": pygame.Rect(20, 340, 250, 240),
         "magazine": pygame.Rect(290, 480, 380, 240)
     }
@@ -217,15 +301,29 @@ def draw_main_screen():
 def update_game_time():
     global game_time, last_update, last_updated_month, main_needs_redraw
     now = pygame.time.get_ticks()
+    main_screen_data["news"] = list(generate_random_news())
+    main_screen_data["magazine"] = generate_magazine_news()
     if not paused and now - last_update >= hour_interval / time_speed:
         game_time += datetime.timedelta(hours=1)
         last_update = now
-
         if game_time.day == 1 and game_time.month != last_updated_month:
-            print(f"✅ Місяць оновлено: {game_time.month}, оновлюємо баланс та графік.")
-            player.apply_monthly_update()
+            refresh_weekly_real_estate()
+            print(f"Місяць оновлено: {game_time.month}, оновлюємо баланс та графік.")
+            company_income, loan_payment_total = player.apply_monthly_update()
+            refresh_available_companies()
             update_balance_history()
+            update_main_assets_block()
             last_updated_month = game_time.month
+            income_entry = f"Місячний дохід: +{player.monthly_income:,} ₴, від компаній: +{company_income:,} ₴".replace(
+                ",", " ")
+            if loan_payment_total > 0:
+                loan_entry = f"Платежі по кредитах: -{loan_payment_total:,} ₴".replace(",", " ")
+                if loan_entry not in player.log[:3]:
+                    player.log.insert(0, loan_entry)
+
+            if income_entry not in player.log[:3]:
+                player.log.insert(0, income_entry)
+            main_screen_data["log"] = ["Останні дії:"] + player.log[:5]
             if current_screen == "main":
                 main_needs_redraw = True
             else:
@@ -423,7 +521,7 @@ def draw_assets_screen():
         pygame.draw.rect(screen, DARK_GRAY, (liabilities_area.right - 10, liabilities_area.y, 6, liabilities_area.height))
         pygame.draw.rect(screen, GRAY, (liabilities_area.right - 10, scroll_y, 6, scroll_height))
 
-    net_worth = player.get_net_worth()
+    net_worth = int(player.get_net_worth())
     screen.blit(medium_plus_font.render(f"Чистий капітал: {net_worth:,} ₴".replace(",", " "), True, (0, 150, 0)), (offset_x + 270, 680))
 
     if selected_fin_item:
@@ -741,6 +839,20 @@ def draw_text_block(text, x, y):
     lines = text.split("\n")
     for i, line in enumerate(lines):
         screen.blit(small_plus_font.render(line, True, BLACK), (x, y + i * 22))
+
+def update_main_assets_block():
+    net_worth = player.get_net_worth()
+    companies = sum(1 for a in player.assets if isinstance(a, Company))
+    monthly_income = player.monthly_income
+    main_screen_data["assets"] = [
+        f"Активи: {companies} компаній",
+        f"Загальна вартість: {int(net_worth):,} ₴".replace(",", " "),
+        f"Дохід/міс: {int(monthly_income):,} ₴".replace(",", " ")
+    ]
+
+def refresh_available_companies():
+    global available_companies
+    available_companies = generate_company_list(n=5)
 
 def draw_partner_screen(partner):
     screen.fill(LIGHT_GRAY)

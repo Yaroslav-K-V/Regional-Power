@@ -22,13 +22,16 @@ class Player:
         self.log = []
 
     def get_net_worth(self):
-        total = 0
+        total_assets = 0
         for a in self.assets:
             if isinstance(a, Company):
-                total += a.cost
+                total_assets += a.cost
+            elif isinstance(a, RealEstate):
+                total_assets += a.value
             elif isinstance(a, dict):
-                total += a.get("value", 0)
-        return total
+                total_assets += a.get("value", 0)
+        total_loans = sum(loan.remaining_balance for loan in self.loans)
+        return total_assets - total_loans + self.balance
 
     def apply_monthly_update(self):
         company_income = 0
@@ -39,6 +42,17 @@ class Player:
             loan_payment_total += payment
             if loan.months_remaining <= 0 or loan.remaining_balance <= 0:
                 self.loans.remove(loan)
+        for a in self.assets:
+            if isinstance(a, Company):
+                net_income = a.calculate_net_income()
+                company_income += net_income
+                a.log.append(f"Прибуток за місяць: +{net_income:,} ₴".replace(",", " "))
+        self.balance += self.monthly_income + company_income - self.monthly_expenses
+        self.log.insert(0, f"📈 Місячний дохід: +{self.monthly_income:,} ₴, від компаній: +{company_income:,} ₴".replace(
+            ",", " "))
+        if loan_payment_total > 0:
+            self.log.insert(0, f"Платежі по кредитах: -{loan_payment_total:,} ₴".replace(",", " "))
+        return company_income, loan_payment_total
 
         if loan_payment_total > 0:
             self.log.insert(0, f"Платежі по кредитах: -{loan_payment_total:,} ₴".replace(",", " "))
@@ -49,4 +63,4 @@ class Player:
                 a.log.append(f"Прибуток за місяць: +{net_income:,} ₴".replace(",", " "))
 
         self.balance += self.monthly_income + company_income - self.monthly_expenses
-        self.log.insert(0, f"📈 Місячний дохід: +{self.monthly_income:,} ₴, від компаній: +{company_income:,} ₴".replace(",", " "))
+        self.log.insert(0, f"Місячний дохід: +{self.monthly_income:,} ₴, від компаній: +{company_income:,} ₴".replace(",", " "))
