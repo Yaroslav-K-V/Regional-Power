@@ -9,7 +9,7 @@ from resources import *
 from mechanics.company_generation import generate_company_list
 from classes.real_estate import *
 from classes.loan import *
-
+from events.events import create_event_dnipro_tax
 
 available_companies = []
 
@@ -90,19 +90,7 @@ player.log.insert(0, f"{game_time.strftime('%d.%m.%Y')} — Отримано к�
 
 active_event = None
 selected_real_estate = selected_fin_item
-
-if not active_event:
-    active_event = {
-        "type": "choice",  # або "info"
-        "title": "Політична пропозиція",
-        "text": "Вас запрошують приєднатися до партії Солідарності...",
-        "options": ["Приєднатися", "Обдумати", "Відмовитися"],
-        "on_choice": {
-            "Приєднатися": print("Event_1_exit_1"),
-            "Обдумати": print("Event_1_exit_2"),
-            "Відмовитися":print("Event_1_exit_3")
-        }
-    }
+last_random_event_month = -10
 
 REAL_ESTATE_TYPE_NAMES = {
     "ResidentialProperty": "Житлова",
@@ -256,8 +244,11 @@ def generate_main_screen_data():
         "news": list(generate_random_news()),
         "assets": ["Стан активів:", random.choice(sample_assets)],
         "event_calendar": ["Найближча подія:", random.choice(sample_events)],
-        "profile": [f"{player.name}, Вік: {player.age}",
-                    f"Інтелект: {player.intelligence} | Харизма: {player.charisma}"],
+        "profile": [ f"{player.name}, {player.age} років",
+                    f"Статус: Бізнесмен",
+                    f"Репутація: 72% | Вплив: 456",
+                    f"Баланс: {player.balance:,} ₴".replace(",", " "),
+                    f"Активи: {len(player.assets)} | Дохід: {player.monthly_income:,} ₴/міс".replace(",", " ")],
         "log": ["Останні дії:"] + player.log[:5],
         "ukraine_map": ["Мапа України", "Область: Херсон"],
         "magazine": generate_magazine_news(),
@@ -298,11 +289,20 @@ def draw_main_screen():
                 text = small_font.render(line, True, DARK_GRAY)
                 main_surface.blit(text, (rect.x + 10, rect.y + 40 + i * 20))
 
+def set_followup_event(new_event):
+    global active_event
+    active_event = new_event
 def update_game_time():
-    global game_time, last_update, last_updated_month, main_needs_redraw
+    global game_time, last_update, last_updated_month, main_needs_redraw,last_random_event_month, active_event
     now = pygame.time.get_ticks()
     main_screen_data["news"] = list(generate_random_news())
     main_screen_data["magazine"] = generate_magazine_news()
+    if game_time.month - last_random_event_month >= 1 or (
+            game_time.month < last_random_event_month and 12 - last_random_event_month + game_time.month >= 3):
+        if random.random() < 0.9:
+            active_event = create_event_dnipro_tax(player, game_time)
+            last_random_event_month = game_time.month
+
     if not paused and now - last_update >= hour_interval / time_speed:
         game_time += datetime.timedelta(hours=1)
         last_update = now
@@ -781,7 +781,6 @@ def draw_event_popup(event):
         txt = small_plus_font.render(line, True, BLACK)
         screen.blit(txt, (popup_rect.x + 20, popup_rect.y + 70 + i * 30))
 
-    # Кнопки
     event["buttons"] = []
     if event["type"] == "info":
         btn_rect = pygame.Rect(popup_rect.x + 400, popup_rect.y + 400, 200, 40)
@@ -802,38 +801,65 @@ def draw_event_popup(event):
 
 def draw_profile_screen():
     screen.fill(LIGHT_GRAY)
-    central_panel_offset_x = 90
-    for partner in partners:
-        pygame.draw.rect(screen, WHITE, partner.rect)
-        pygame.draw.rect(screen, BLACK, partner.rect, 2)
-        name_text = font.render(partner.name, True, BLACK)
-        role_text = font.render("Бізнес-Партнер", True, DARK_GRAY)
-        screen.blit(name_text, (partner.rect.x + 10, partner.rect.y + 10))
-        screen.blit(role_text, (partner.rect.x + 10, partner.rect.y + 35))
+    offset = 90
 
-    pygame.draw.rect(screen, WHITE, (250 + central_panel_offset_x, 50, 1000, 620))
-    pygame.draw.rect(screen, BLACK, (250 + central_panel_offset_x, 50, 1000, 620), 3)
+    panel_rect = pygame.Rect(250 + offset, 50, 1000, 620)
 
-    pygame.draw.circle(screen, DARK_GRAY, (800 + central_panel_offset_x, 150), 60)
+    pygame.draw.rect(screen, BLACK, panel_rect, 3)
 
-    name = medium_plus_font.render("Player", True, BLACK)
-    screen.blit(name, (300 + central_panel_offset_x, 230))
+    pygame.draw.circle(screen, DARK_GRAY, (800 + offset, 150), 60)
+    images["company_bg"] = images["company_bg"].convert_alpha()
+    images["profile_bg"] = pygame.image.load("assets/profile_bg.png").convert_alpha()
 
-    pygame.draw.rect(screen, LIGHT_GRAY, (300 + central_panel_offset_x, 280, 250, 130))
-    pygame.draw.rect(screen, LIGHT_GRAY, (570 + central_panel_offset_x, 280, 250, 130))
-    pygame.draw.rect(screen, LIGHT_GRAY, (840 + central_panel_offset_x, 280, 300, 130))
+    if "avatar" in images:
+        avatar_img = pygame.transform.scale(images["avatar"], (120, 120))
+        screen.blit(avatar_img, (740 + offset, 90))
 
-    draw_text_block("Фінансовий стан\nКапітал: 3 200 000 грн\nАктиви: 4 компанії\n+15 000 грн/міс", 310 + central_panel_offset_x, 290)
-    draw_text_block("Відношення\nДовіра: 50\nПідтримує: Правих", 580 + central_panel_offset_x, 290)
-    draw_text_block("Імідж\nРепутація: 72%\nВплив: 456\nЮридичні проблеми: Так", 850 + central_panel_offset_x, 290)
+    if "profile_bg" in images:
+        bg_img = pygame.transform.scale(images["profile_bg"], panel_rect.size)
+        screen.blit(bg_img, panel_rect.topleft)
 
-    pygame.draw.rect(screen, LIGHT_GRAY, (840 + central_panel_offset_x, 430, 380, 220))
-    pygame.draw.rect(screen, BLACK, (840 + central_panel_offset_x, 430, 380, 220), 1)
-    screen.blit(font.render("Останні дії", True, BLACK), (850 + central_panel_offset_x, 440))
+        overlay = pygame.Surface(panel_rect.size, pygame.SRCALPHA)
+        overlay.fill((255, 255, 255, 180))
+        screen.blit(overlay, panel_rect.topleft)
+    else:
+        pygame.draw.rect(screen, WHITE, panel_rect)
 
-    for i in range(5):
-        log_text = font.render(f"{20 - i}.03.2007 - Подія №{i + 1}", True, BLACK)
-        screen.blit(log_text, (850 + central_panel_offset_x, 470 + i * 30))
+    screen.blit(bg_img, panel_rect.topleft)
+
+    name_text = medium_plus_font.render(player.name, True, BLACK)
+    screen.blit(name_text, (300 + offset, 60))
+
+    status_block = [
+        f"Роль: Гравець",
+        f"Вік: {player.age}"
+    ]
+
+    financial_block = [
+        "Фінансовий стан",
+        f"Баланс: {player.balance:,} ₴".replace(",", " "),
+        f"Активи: {len(player.assets)}",
+        f"Доходи: {player.monthly_income:,} ₴/міс".replace(",", " ")
+    ]
+
+    image_block = [
+        "Імідж",
+        "Репутація: 72%",
+        "Вплив: 456",
+        "Юридичні проблеми: Немає"
+    ]
+
+    draw_text_block("\n".join(financial_block), 310 + offset, 130)
+    draw_text_block("\n".join(status_block), 580 + offset, 130)
+    draw_text_block("\n".join(image_block), 850 + offset, 130)
+
+    pygame.draw.rect(screen, WHITE, (310 + offset, 330, 820, 300))
+    pygame.draw.rect(screen, BLACK, (310 + offset, 330, 820, 300), 1)
+    screen.blit(font.render("Останні дії", True, BLACK), (320 + offset, 340))
+
+    for i, entry in enumerate(player.log[:6]):
+        log_text = small_font.render(entry, True, DARK_GRAY)
+        screen.blit(log_text, (320 + offset, 370 + i * 30))
 
 def draw_text_block(text, x, y):
     lines = text.split("\n")
@@ -858,23 +884,18 @@ def draw_partner_screen(partner):
     screen.fill(LIGHT_GRAY)
     offset = 90
 
-    # Профільна панель
     pygame.draw.rect(screen, WHITE, (250 + offset, 50, 1000, 620))
     pygame.draw.rect(screen, BLACK, (250 + offset, 50, 1000, 620), 3)
 
-    # Аватар
     pygame.draw.circle(screen, DARK_GRAY, (800 + offset, 150), 60)
 
-    # Ім’я
     name = medium_plus_font.render(partner.name + " Вікторович", True, BLACK)
     screen.blit(name, (300 + offset, 230))
 
-    # Інфо-блоки
     draw_text_block(f"Фінансовий стан\nКапітал: {partner.capital}\nАктиви: {partner.assets}\n{partner.income}", 310 + offset, 290)
     draw_text_block(f"Відношення\nДовіра: {partner.trust}\nПідтримує: {partner.supports}", 580 + offset, 290)
     draw_text_block(f"Імідж\nРепутація: {partner.reputation}\nВплив: {partner.influence}\nЮридичні проблеми: {partner.legal_issues}", 850 + offset, 290)
 
-    # Лог
     pygame.draw.rect(screen, LIGHT_GRAY, (840 + offset, 430, 380, 220))
     pygame.draw.rect(screen, BLACK, (840 + offset, 430, 380, 220), 1)
     screen.blit(font.render("Останні дії", True, BLACK), (850 + offset, 440))
@@ -985,15 +1006,19 @@ while True:
                 if scroll_area.collidepoint(mouse_pos):
                     max_scroll = max(0, len(available_companies) * 120 - scroll_area.height)
                     scroll_offset_market = max(0, min(scroll_offset_market - event.y * 30, max_scroll))
-
+        elif active_event and active_event["type"] == "info" and label == "Закрити":
+            active_event = None
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mouse_pos = pygame.mouse.get_pos()
             if active_event:
                 for label, rect in active_event["buttons"]:
                     if rect.collidepoint(event.pos):
-                        active_event = None
-                        break
-                continue
+                        choice = label
+                        if active_event["type"] == "choice":
+                            choice = label
+                            func = active_event["on_choice"].get(choice)
+                            if func:
+                                active_event = func()
 
             elif current_screen == "company_manage" and selected_company:
                 if hasattr(selected_company, "manage_btns"):
@@ -1190,7 +1215,8 @@ while True:
                 idx = available_speeds.index(time_speed)
                 if idx > 0:
                     time_speed = available_speeds[idx - 1]
-
+            elif active_event:
+                active_event = None
             elif event.type == pygame.MOUSEMOTION:
                 for btn in company_buttons:
                     btn.check_hover(event.pos)
