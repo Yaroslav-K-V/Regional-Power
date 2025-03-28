@@ -2,24 +2,22 @@ class Company:
     def __init__(self, name, sector, cost, income):
         self.name = name
         self.sector = sector
-        self.cost = cost  # Ціна купівлі
-        self.income = income  # Базовий дохід
-        self.owner = None  # Власник (гравець, NPC)
-        self.manager = None  # Поки заглушка
+        self.cost = cost
+        self.income = income
+        self.owner = None
+        self.manager = None
 
-        # Менеджмент
         self.employees = 10
         self.salary_per_employee = 5000
         self.expenses = self.employees * self.salary_per_employee
-        self.reputation = 50  # Від 0 до 100
-        self.efficiency = 1.0  # Множник ефективності
-        self.risk = 0.1  # Ймовірність негативної події
-        self.assets_value = cost  # Вартість компанії
-        self.active = True  # Працює чи закрита
+        self.reputation = 50
+        self.efficiency = 1.0
+        self.risk = 0.1
+        self.assets_value = cost
+        self.active = True
 
-        # Нові поля
-        self.debt = 0  # Кредит
-        self.events = []  # Список подій
+        self.debt = 0
+        self.events = []
         self.log = []
 
     def calculate_real_income(self):

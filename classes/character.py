@@ -7,7 +7,6 @@ class Character:
         self.color = color
         self.rect = pygame.Rect(position[0], position[1], 100, 100)
 
-        # Додаткові дані
         self.capital = "3 200 000 грн"
         self.assets = "4 компанії"
         self.income = "+15 000 грн/міс"
@@ -16,11 +15,7 @@ class Character:
         self.reputation = "72%"
         self.influence = "456"
         self.legal_issues = "Так"
-        self.log = [
-            "23.03.2007 - Виступ",
-            "22.03.2007 - Переговори",
-            "21.03.2007 - Придбання компанії"
-        ]
+        self.log = []
         self.selected = False
 
     def draw(self, surface, font_name, font_role):

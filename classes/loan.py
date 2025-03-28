@@ -2,14 +2,13 @@ class Loan:
     def __init__(self, lender, principal, interest_rate, term_months):
         self.lender = lender
         self.principal = principal
-        self.interest_rate = interest_rate  # у вигляді 0.1 для 10%
+        self.interest_rate = interest_rate
         self.term_months = term_months
         self.remaining_balance = principal
         self.monthly_payment = self.calculate_monthly_payment()
         self.months_remaining = term_months
 
     def calculate_monthly_payment(self):
-        # Стандартна формула для ануїтетних платежів
         r = self.interest_rate / 12
         n = self.term_months
         if r == 0:
